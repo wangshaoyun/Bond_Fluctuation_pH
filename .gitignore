@@ -1,3 +1,11 @@
 
 Kremmer.f
 test.f90
+data/bond_numb.txt
+data/bond_numb1.txt
+data/monbd.txt
+data/pos.txt
+data/pos1.txt
+global_variables.o
+*.mod
+*.o
