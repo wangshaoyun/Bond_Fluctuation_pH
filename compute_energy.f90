@@ -30,7 +30,7 @@ implicit none
 !   real*8,  allocatable, dimension( : ), private :: real_fun 
 !                         !Function list of erfc and coefficients in real space
 
-! contains 
+contains 
 
 ! subroutine initialize_energy_parameter
 !   use global_variables
@@ -77,6 +77,14 @@ implicit none
 ! end subroutine read_force_parameters
 
 
+subroutine Delta_Energy(DeltaE)
+  use global_variables
+  implicit none
+  real*8, intent(out) :: DeltaE
+
+  DeltaE = -1
+
+end subroutine Delta_Energy
 
 
 end module compute_energy

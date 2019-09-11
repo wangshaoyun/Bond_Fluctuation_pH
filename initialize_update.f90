@@ -33,7 +33,7 @@ subroutine uniform_star_brushes
   integer :: nx, dLx
   integer :: base, base1, base2
   integer :: xi, yi, zi, xp, yp, zp
-  integer, dimension(5,4) :: bond_vector
+  integer, dimension(6,4) :: bond_vector
 
   nx = nint( sqrt(1.*Nga) )
   dLx = Lx / nx
@@ -61,8 +61,12 @@ subroutine uniform_star_brushes
   bond_vector(5,1) = 0
   bond_vector(5,2) = -2
   bond_vector(5,3) = 0
-  bond_vector(5,4) = 6     
-
+  bond_vector(5,4) = 6    
+  !down 
+  bond_vector(6,1) = 0
+  bond_vector(6,2) = 0
+  bond_vector(6,3) = -2
+  bond_vector(6,4) = 4     !bond number in bonds.txt
   do i = 1, nx
     do j = 1, nx
       l = (i-1)*nx + j
@@ -96,8 +100,13 @@ subroutine uniform_star_brushes
         monbd(base2+1,2) = base2 + 2 - l    
         monbd(base2+1,arm+1) = 2
         do n = 2, Nma
-          pos(base2+n,:) = pos(base2+n-1,:) + bond_vector(1,1:3)
-          bond_numb(base2+n-l) = bond_vector(1,4)
+          if ( m == 2 ) then
+            pos(base2+n,:) = pos(base2+n-1,:) + bond_vector(1,1:3)
+            bond_numb(base2+n-l) = bond_vector(1,4)
+          else
+            pos(base2+n,:) = pos(base2+n-1,:) + bond_vector(6,1:3)
+            bond_numb(base2+n-l) = bond_vector(6,4)
+          end if
           monbd(base2+n,1) = base2 + n - l                
           monbd(base2+n,2) = base2 + n + 1 - l            
           monbd(base2+n,arm+1) = 2
@@ -113,9 +122,6 @@ subroutine uniform_star_brushes
     xi = pos(i,1)
     yi = pos(i,2)
     zi = pos(i,3)
-    if (zi == 0) then
-      cycle
-    end if
     xp = ipx(xi)
     yp = ipy(yi)
     zp = ipz(zi)
@@ -185,16 +191,16 @@ subroutine initialize_ions
 end subroutine initialize_ions
 
 
-subroutine monte_carlo_move
+subroutine monte_carlo_move( EE, DeltaE )
   use global_variables
   implicit none
+  real*8, intent(inout) :: EE
+  real*8, intent(out) :: DeltaE
   integer :: i
 
-  do i = 1 : NN - Nga
+  do i = 1, NN - Nga
     call choose_particle
-    call new_position
-    call delta_energy
-    call move_or_not
+    call new_position(EE,DeltaE)
   end do
 
 end subroutine monte_carlo_move
@@ -220,33 +226,330 @@ subroutine choose_particle
 end subroutine choose_particle
 
 
-subroutine new_position
+subroutine new_position(EE, DeltaE)
   use global_variables
+  use compute_energy
   implicit none
-  integer :: dir  !direction, with 6 choice
+  real*8,  intent(out)   :: DeltaE
+  real*8,  intent(inout) :: EE
+  integer :: dir  ! direction, with 6 choice
   integer :: bn   ! number of bonds connect to the particle
   integer, allocatable, dimension(:) :: new_bonds
-  integer :: i
+  integer :: i, ix, iy, iz, testlat
+  integer :: xm1, xp1, xp2, ym1, yp1, yp2, zm1, zp1, zp2 
   real*8  :: rnd
+  logical :: test
 
   call random_number(rnd)
   dir = floor(6*rnd)+1
-
-  bn = monbd(ip,arm+1)
-  allocate(new_bonds(bn))
-
-  new_bonds(1) = move( bond_number( monbd( ip, 1 ) ), dir )
-  do i = 2, bn
-    new_bonds(i) = move( bond_number( monbd( ip, i ) ), 7-dir )
-  end do
-
   pos_ip0 = pos(ip,:)
   pos_ip1(1:3) = pos_ip0(1:3) + new_direction(dir,:)
   pos_ip1(4)   = pos_ip0(4)
   call periodic_condition( pos_ip1(1:2) )
+  ix = pos_ip0(1)
+  iy = pos_ip0(2)
+  iz = pos_ip0(3)
+
+  test = .false.
+  if ( ip <= Npe ) then
+    bn = monbd(ip,arm+1)
+    if ( allocated(new_bonds) ) deallocate(new_bonds)
+    allocate(new_bonds(bn))
+    new_bonds(1) = move( bond_numb( monbd( ip, 1 ) ), dir )
+    do i = 2, bn
+      new_bonds(i) = move( bond_numb( monbd( ip, i ) ), 7-dir )
+    end do
+    test = .true.
+    do i = 1, bn
+      if ( new_bonds(i) == 0 ) then
+        test = .false.
+        exit
+      end if
+    end do
+  end if
+
+  if ( test .or. (ip>Npe) )then
+!     write(*,*) ipx(ix),ip2x(ix),imy(iy),ipy(iy),ip2y(iy),imy(iy),ipz(iz),ip2z(iz),imz(iz)
+    select case (dir)
+    case ( 1 )
+      xp2 = ip2x(ix)
+      yp1 = ipy(iy)
+      zp1 = ipz(iz)
+      testlat = latt(xp2,iy,iz)  + latt(xp2,yp1,iz) + &
+                latt(xp2,iy,zp1) + latt(xp2,yp1,zp1)
+      if( testlat == 0 ) then
+        call Delta_Energy(DeltaE)
+        if ( DeltaE < 0 ) then
+          pos(ip,1:3) = pos_ip1(1:3)
+          EE = EE + DeltaE
+          if ( ip < Npe ) then
+            do i = 1, bn
+              bond_numb( monbd( ip, i ) )= new_bonds(i)
+            end do
+          end if
+          latt(xp2,iy,iz)   = 1 
+          latt(xp2,yp1,iz)  = 1 
+          latt(xp2,iy,zp1)  = 1 
+          latt(xp2,yp1,zp1) = 1 
+          latt(ix,iy,iz)    = 0 
+          latt(ix,yp1,iz)   = 0 
+          latt(ix,iy,zp1)   = 0 
+          latt(ix,yp1,zp1)  = 0 
+        else
+          call random_number(rnd)
+          if ( rnd < Exp(-Beta*DeltaE) ) then
+            pos(ip,1:3) = pos_ip1(1:3) 
+            EE = EE + DeltaE
+            if ( ip < Npe ) then
+              do i = 1, bn
+                bond_numb( monbd( ip, i ) )= new_bonds(i)
+              end do
+            end if
+            latt(xp2,iy,iz)   = 1 
+            latt(xp2,yp1,iz)  = 1 
+            latt(xp2,iy,zp1)  = 1 
+            latt(xp2,yp1,zp1) = 1 
+            latt(ix,iy,iz)    = 0 
+            latt(ix,yp1,iz)   = 0 
+            latt(ix,iy,zp1)   = 0 
+            latt(ix,yp1,zp1)  = 0 
+          end if
+        end if
+      end if
+    case ( 6 ) 
+      xm1 = imx(ix)
+      yp1 = ipy(iy)
+      zp1 = ipz(iz)
+      testlat = latt(xm1,iy,iz)  + latt(xm1,yp1,iz) + &
+                latt(xm1,iy,zp1) + latt(xm1,yp1,zp1)
+      if( testlat == 0 ) then
+        call Delta_Energy(DeltaE)
+        if ( DeltaE < 0 ) then
+          pos(ip,1:3) = pos_ip1(1:3)
+          EE = EE + DeltaE
+          if ( ip < Npe ) then
+            do i = 1, bn
+              bond_numb( monbd( ip, i ) )= new_bonds(i)
+            end do
+          end if
+          latt(xm1,iy,iz)   = 1 
+          latt(xm1,yp1,iz)  = 1 
+          latt(xm1,iy,zp1)  = 1 
+          latt(xm1,yp1,zp1) = 1 
+          latt(xp1,iy,iz)   = 0 
+          latt(xp1,yp1,iz)  = 0 
+          latt(xp1,iy,zp1)  = 0 
+          latt(xp1,yp1,zp1) = 0 
+        else
+          call random_number(rnd)
+          if ( rnd < Exp(-Beta*DeltaE) ) then
+            pos(ip,1:3) = pos_ip1(1:3) 
+            EE = EE + DeltaE
+            if ( ip < Npe ) then
+              do i = 1, bn
+                bond_numb( monbd( ip, i ) )= new_bonds(i)
+              end do
+            end if
+            latt(xm1,iy,iz)   = 1 
+            latt(xm1,yp1,iz)  = 1 
+            latt(xm1,iy,zp1)  = 1 
+            latt(xm1,yp1,zp1) = 1 
+            latt(xp1,iy,iz)   = 0 
+            latt(xp1,yp1,iz)  = 0 
+            latt(xp1,iy,zp1)  = 0 
+            latt(xp1,yp1,zp1) = 0 
+          end if
+        end if
+      end if
+    case (2)
+      xp1 = ipx(ix)
+      yp2 = ip2y(iy)
+      zp1 = ipz(iz)
+      testlat = latt(ix,yp2,iz)  + latt(xp1,yp2,iz) + &
+                latt(ix,yp2,zp1) + latt(xp1,yp2,zp1)
+      if( testlat == 0 ) then
+        call Delta_Energy(DeltaE)
+        if ( DeltaE < 0 ) then
+          pos(ip,1:3) = pos_ip1(1:3)
+          EE = EE + DeltaE
+          if ( ip < Npe ) then
+            do i = 1, bn
+              bond_numb( monbd( ip, i ) ) = new_bonds(i)
+            end do
+          end if
+          latt(ix,yp2,iz)   = 1 
+          latt(xp1,yp2,iz)  = 1 
+          latt(ix,yp2,zp1)  = 1 
+          latt(xp1,yp2,zp1) = 1 
+          latt(ix,iy,iz)    = 0 
+          latt(xp1,iy,iz)   = 0 
+          latt(ix,iy,zp1)   = 0 
+          latt(xp1,iy,zp1)  = 0 
+        else
+          call random_number(rnd)
+          if ( rnd < Exp(-Beta*DeltaE) ) then
+            pos(ip,1:3) = pos_ip1(1:3) 
+            EE = EE + DeltaE
+            if ( ip < Npe ) then
+              do i = 1, bn
+                bond_numb( monbd( ip, i ) ) = new_bonds(i)
+              end do
+            end if
+            latt(ix,yp2,iz)   = 1 
+            latt(xp1,yp2,iz)  = 1 
+            latt(ix,yp2,zp1)  = 1 
+            latt(xp1,yp2,zp1) = 1 
+            latt(ix,iy,iz)    = 0 
+            latt(xp1,iy,iz)   = 0 
+            latt(ix,iy,zp1)   = 0 
+            latt(xp1,iy,zp1)  = 0 
+          end if
+        end if
+      end if
+    case (5)
+      xp1 = ipx(ix)
+      ym1 = imy(iy)
+      zp1 = ipz(iz)
+      testlat = latt(ix,ym1,iz)  + latt(xp1,ym1,iz) + &
+                latt(ix,ym1,zp1) + latt(xp1,ym1,zp1)
+      if( testlat == 0 ) then
+        call Delta_Energy(DeltaE)
+        if ( DeltaE < 0 ) then
+          pos(ip,1:3) = pos_ip1(1:3)
+          EE = EE + DeltaE
+          if ( ip < Npe ) then
+            do i = 1, bn
+              bond_numb( monbd( ip, i ) ) = new_bonds(i)
+            end do
+          end if
+          latt(ix,ym1,iz)   = 1 
+          latt(xp1,ym1,iz)  = 1 
+          latt(ix,ym1,zp1)  = 1 
+          latt(xp1,ym1,zp1) = 1 
+          latt(ix,yp1,iz)   = 0 
+          latt(xp1,yp1,iz)  = 0 
+          latt(ix,yp1,zp1)  = 0 
+          latt(xp1,yp1,zp1) = 0 
+        else
+          call random_number(rnd)
+          if ( rnd < Exp(-Beta*DeltaE) ) then
+            pos(ip,1:3) = pos_ip1(1:3) 
+            EE = EE + DeltaE
+            if ( ip < Npe ) then
+              do i = 1, bn
+                bond_numb( monbd( ip, i ) ) = new_bonds(i)
+              end do
+            end if
+            latt(ix,ym1,iz)   = 1 
+            latt(xp1,ym1,iz)  = 1 
+            latt(ix,ym1,zp1)  = 1 
+            latt(xp1,ym1,zp1) = 1 
+            latt(ix,yp1,iz)   = 0 
+            latt(xp1,yp1,iz)  = 0 
+            latt(ix,yp1,zp1)  = 0 
+            latt(xp1,yp1,zp1) = 0 
+          end if
+        end if
+      end if
+    case (3)
+      xp1 = ipx(ix)
+      yp1 = ipy(iy)
+      zp2 = ip2z(iz)
+      testlat = latt(ix,iy,zp2)  + latt(xp1,iy,zp2) + &
+                latt(ix,yp1,zp2) + latt(xp1,yp1,zp2)
+      if( testlat == 0 ) then
+        call Delta_Energy(DeltaE)
+        if ( DeltaE < 0 ) then
+          pos(ip,1:3) = pos_ip1(1:3)
+          EE = EE + DeltaE
+          if ( ip < Npe ) then
+            do i = 1, bn
+              bond_numb( monbd( ip, i ) ) = new_bonds(i)
+            end do
+          end if
+          latt(ix,iy,zp2)   = 1 
+          latt(xp1,iy,zp2)  = 1 
+          latt(ix,yp1,zp2)  = 1 
+          latt(xp1,yp1,zp2) = 1 
+          latt(ix,iy,iz)    = 0 
+          latt(xp1,iy,iz)   = 0 
+          latt(ix,yp1,iz)   = 0 
+          latt(xp1,yp1,iz)  = 0 
+        else
+          call random_number(rnd)
+          if ( rnd < Exp(-Beta*DeltaE) ) then
+            pos(ip,1:3) = pos_ip1(1:3) 
+            EE = EE + DeltaE
+            if ( ip < Npe ) then
+              do i = 1, bn
+                bond_numb( monbd( ip, i ) ) = new_bonds(i)
+              end do
+            end if
+            latt(ix,iy,zp2)   = 1 
+            latt(xp1,iy,zp2)  = 1 
+            latt(ix,yp1,zp2)  = 1 
+            latt(xp1,yp1,zp2) = 1 
+            latt(ix,iy,iz)    = 0 
+            latt(xp1,iy,iz)   = 0 
+            latt(ix,yp1,iz)   = 0 
+            latt(xp1,yp1,iz)  = 0 
+          end if
+        end if
+      end if
+    case (4)
+      xp1 = ipx(ix)
+      yp1 = ipy(iy)
+      zm1 = imz(iz)
+      testlat = latt(ix,iy,zm1)  + latt(xp1,iy,zm1) + &
+                latt(ix,yp1,zm1) + latt(xp1,yp1,zm1)
+      if( testlat == 0 ) then
+        call Delta_Energy(DeltaE)
+        if ( DeltaE < 0 ) then
+          pos(ip,1:3) = pos_ip1(1:3)
+          EE = EE + DeltaE
+          if ( ip < Npe ) then
+            do i = 1, bn
+              bond_numb( monbd( ip, i ) ) = new_bonds(i)
+            end do
+          end if
+          latt(ix,iy,zm1)   = 1 
+          latt(xp1,iy,zm1)  = 1 
+          latt(ix,yp1,zm1)  = 1 
+          latt(xp1,yp1,zm1) = 1 
+          latt(ix,iy,iz)    = 0 
+          latt(xp1,iy,iz)   = 0 
+          latt(ix,yp1,iz)   = 0 
+          latt(xp1,yp1,iz)  = 0 
+        else
+          call random_number(rnd)
+          if ( rnd < Exp(-Beta*DeltaE) ) then
+            pos(ip,1:3) = pos_ip1(1:3) 
+            EE = EE + DeltaE
+            if ( ip < Npe ) then
+              do i = 1, bn
+                bond_numb( monbd( ip, i ) ) = new_bonds(i)
+              end do
+            end if
+            latt(ix,iy,zm1)   = 1 
+            latt(xp1,iy,zm1)  = 1 
+            latt(ix,yp1,zm1)  = 1 
+            latt(xp1,yp1,zm1) = 1 
+            latt(ix,iy,iz)    = 0 
+            latt(xp1,iy,iz)   = 0 
+            latt(ix,yp1,iz)   = 0 
+            latt(xp1,yp1,iz)  = 0 
+          end if
+        end if
+      end if
+    end select
+  end if
 
 end subroutine new_position
 
 
 end module initialize_update
+
+
+
+
 

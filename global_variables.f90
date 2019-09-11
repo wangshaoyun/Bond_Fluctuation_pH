@@ -45,14 +45,13 @@ save
   real*8  :: total_time=0         !total time of the simulation
   !
   !histogram
-  integer :: SizeHist1=500        !number of histogram which is equally divided
-  integer :: SizeHist2=2000       !number of histogram which is equally divided
+  integer :: SizeHist=500         !number of histogram which is equally divided
 !################end running and Histogram#################!
 
 !##########################arrays##########################!
   integer, allocatable, dimension(:,:) :: pos    !array of position
-  real*8, dimension(4) :: pos_ip0                !old position of ip
-  real*8, dimension(4) :: pos_ip1                !new position of ip
+  integer, dimension(4) :: pos_ip0                !old position of ip
+  integer, dimension(4) :: pos_ip1                !new position of ip
   integer :: ip                                  !The particle that is choosed
   integer, dimension(6,3) :: new_direction
   integer, allocatable, dimension(:,:) :: monbd         !bonds of the monomers
@@ -103,7 +102,6 @@ subroutine periodic_condition(rr)
   !Routine Referenced:
   !1.
   !--------------------------------------!
-  use global_variables
   implicit none
   integer, intent(inout) :: rr(2)
 
