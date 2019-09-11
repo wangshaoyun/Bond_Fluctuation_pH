@@ -303,6 +303,30 @@ subroutine initialize_bond_vector
   !     write(*,*) b1(i), b12(i)
   !   end do
 
+  new_direction(1,1) = 1
+  new_direction(1,2) = 0
+  new_direction(1,3) = 0
+
+  new_direction(2,1) = 0
+  new_direction(2,2) = 1
+  new_direction(2,3) = 0
+
+  new_direction(3,1) = 0
+  new_direction(3,2) = 0
+  new_direction(3,3) = 1  
+
+  new_direction(4,1) = 0
+  new_direction(4,2) = 0
+  new_direction(4,3) = -1
+
+  new_direction(5,1) = 0
+  new_direction(5,2) = -1 
+  new_direction(5,3) = 0   
+
+  new_direction(6,1) = -1
+  new_direction(6,2) = 0
+  new_direction(6,3) = 0
+
 end subroutine initialize_bond_vector
 
 

@@ -50,11 +50,17 @@ save
 !################end running and Histogram#################!
 
 !##########################arrays##########################!
-  integer, allocatable, dimension(:,:) :: pos           !array of position
+  integer, allocatable, dimension(:,:) :: pos    !array of position
+  real*8, dimension(4) :: pos_ip0                !old position of ip
+  real*8, dimension(4) :: pos_ip1                !new position of ip
+  integer :: ip                                  !The particle that is choosed
+  integer, dimension(6,3) :: new_direction
   integer, allocatable, dimension(:,:) :: monbd         !bonds of the monomers
-  integer, allocatable, dimension(:)   :: bond_numb     !bond number
+  integer, allocatable, dimension(:)   :: bond_numb     !bond number, always 
+                                                        !from former particle 
+                                                        !to next particle
   integer(kind=1), allocatable, dimension(:,:,:):: latt !status of occupation 
-                                                         !of lattice
+                                                        !of lattice
   ! i is lattice number, or the 
   ! left lattice point, i_plus is the right lattice point
   integer, allocatable, dimension(:) :: ipx   
@@ -79,6 +85,40 @@ save
   real*8, allocatable, dimension(:) :: b1   ! bonds length array
   real*8, allocatable, dimension(:) :: b12  ! square of bonds length array
 !########################end arrays########################!
+
+
+contains
+
+subroutine periodic_condition(rr)
+  !--------------------------------------!
+  !Peridodic condition of position vector
+  !rr(2) in slab geometry.
+  !   
+  !Input
+  !   rr
+  !Output
+  !   rr
+  !External Variables
+  !   Lx, Ly
+  !Routine Referenced:
+  !1.
+  !--------------------------------------!
+  use global_variables
+  implicit none
+  integer, intent(inout) :: rr(2)
+
+  if ( rr(1) > Lx ) then
+    rr(1) = rr(1) - Lx
+  elseif( rr(1) <= 0 ) then
+    rr(1) = rr(1) + Lx
+  end if
+  if ( rr(2) > Ly ) then
+    rr(2) = rr(2) - Ly
+  elseif( rr(2) <= 0 ) then
+    rr(2) = rr(2) + Ly
+  end if
+
+end subroutine periodic_condition
 
 end module global_variables 
 
