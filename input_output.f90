@@ -655,15 +655,15 @@ subroutine write_pos
     end do
   close(100)
 
-!   open(100,file='./data/latt.txt')
-!     do i = 1, Lx
-!       do j = 1, Ly
-!         do k = 1, Lz+1
-!           write(100,'(I1)') latt(i,j,k)
-!         end do
-!       end do
-!     end do
-!   close(100)
+  open(100,file='./data/latt.txt')
+    do i = 1, Lx
+      do j = 1, Ly
+        do k = 1, Lz+1
+          write(100,'(4I6)') i,j,k,latt(i,j,k)
+        end do
+      end do
+    end do
+  close(100)
 
 end subroutine write_pos
 
@@ -684,15 +684,15 @@ subroutine write_pos1
     end do
   close(100)
 
-!   open(100,file='./data/latt1.txt')
-!     do i = 1, Lx
-!       do j = 1, Ly
-!         do k = 1, Lz+1
-!           write(100,'(I1)') latt(i,j,k)
-!         end do
-!       end do
-!     end do
-!   close(100)
+  open(100,file='./data/latt1.txt')
+    do i = 1, Lx
+      do j = 1, Ly
+        do k = 1, Lz+1
+          write(100,'(4I6)') i,j,k,latt(i,j,k)
+        end do
+      end do
+    end do
+  close(100)
 
 end subroutine write_pos1
 

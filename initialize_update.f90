@@ -235,7 +235,7 @@ subroutine new_position(EE, DeltaE)
   integer :: dir  ! direction, with 6 choice
   integer :: bn   ! number of bonds connect to the particle
   integer, allocatable, dimension(:) :: new_bonds
-  integer :: i, ix, iy, iz, testlat
+  integer :: i, ix, iy, iz, testlat, summ
   integer :: xm1, xp1, xp2, ym1, yp1, yp2, zm1, zp1, zp2 
   real*8  :: rnd
   logical :: test
@@ -269,7 +269,6 @@ subroutine new_position(EE, DeltaE)
   end if
 
   if ( test .or. (ip>Npe) )then
-!     write(*,*) ipx(ix),ip2x(ix),imy(iy),ipy(iy),ip2y(iy),imy(iy),ipz(iz),ip2z(iz),imz(iz)
     select case (dir)
     case ( 1 )
       xp2 = ip2x(ix)
@@ -282,7 +281,7 @@ subroutine new_position(EE, DeltaE)
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
-          if ( ip < Npe ) then
+          if ( ip <= Npe ) then
             do i = 1, bn
               bond_numb( monbd( ip, i ) )= new_bonds(i)
             end do
@@ -300,7 +299,7 @@ subroutine new_position(EE, DeltaE)
           if ( rnd < Exp(-Beta*DeltaE) ) then
             pos(ip,1:3) = pos_ip1(1:3) 
             EE = EE + DeltaE
-            if ( ip < Npe ) then
+            if ( ip <= Npe ) then
               do i = 1, bn
                 bond_numb( monbd( ip, i ) )= new_bonds(i)
               end do
@@ -318,16 +317,17 @@ subroutine new_position(EE, DeltaE)
       end if
     case ( 6 ) 
       xm1 = imx(ix)
+      xp1 = ipx(ix)
       yp1 = ipy(iy)
       zp1 = ipz(iz)
       testlat = latt(xm1,iy,iz)  + latt(xm1,yp1,iz) + &
-                latt(xm1,iy,zp1) + latt(xm1,yp1,zp1)
+         &      latt(xm1,iy,zp1) + latt(xm1,yp1,zp1)
       if( testlat == 0 ) then
         call Delta_Energy(DeltaE)
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
-          if ( ip < Npe ) then
+          if ( ip <= Npe ) then
             do i = 1, bn
               bond_numb( monbd( ip, i ) )= new_bonds(i)
             end do
@@ -339,13 +339,12 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,iy,iz)   = 0 
           latt(xp1,yp1,iz)  = 0 
           latt(xp1,iy,zp1)  = 0 
-          latt(xp1,yp1,zp1) = 0 
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
             pos(ip,1:3) = pos_ip1(1:3) 
             EE = EE + DeltaE
-            if ( ip < Npe ) then
+            if ( ip <= Npe ) then
               do i = 1, bn
                 bond_numb( monbd( ip, i ) )= new_bonds(i)
               end do
@@ -366,13 +365,13 @@ subroutine new_position(EE, DeltaE)
       yp2 = ip2y(iy)
       zp1 = ipz(iz)
       testlat = latt(ix,yp2,iz)  + latt(xp1,yp2,iz) + &
-                latt(ix,yp2,zp1) + latt(xp1,yp2,zp1)
+        &       latt(ix,yp2,zp1) + latt(xp1,yp2,zp1)
       if( testlat == 0 ) then
         call Delta_Energy(DeltaE)
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
-          if ( ip < Npe ) then
+          if ( ip <= Npe ) then
             do i = 1, bn
               bond_numb( monbd( ip, i ) ) = new_bonds(i)
             end do
@@ -390,7 +389,7 @@ subroutine new_position(EE, DeltaE)
           if ( rnd < Exp(-Beta*DeltaE) ) then
             pos(ip,1:3) = pos_ip1(1:3) 
             EE = EE + DeltaE
-            if ( ip < Npe ) then
+            if ( ip <= Npe ) then
               do i = 1, bn
                 bond_numb( monbd( ip, i ) ) = new_bonds(i)
               end do
@@ -409,15 +408,16 @@ subroutine new_position(EE, DeltaE)
     case (5)
       xp1 = ipx(ix)
       ym1 = imy(iy)
+      yp1 = ipy(iy)
       zp1 = ipz(iz)
       testlat = latt(ix,ym1,iz)  + latt(xp1,ym1,iz) + &
-                latt(ix,ym1,zp1) + latt(xp1,ym1,zp1)
+       &        latt(ix,ym1,zp1) + latt(xp1,ym1,zp1)
       if( testlat == 0 ) then
         call Delta_Energy(DeltaE)
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
-          if ( ip < Npe ) then
+          if ( ip <= Npe ) then
             do i = 1, bn
               bond_numb( monbd( ip, i ) ) = new_bonds(i)
             end do
@@ -435,7 +435,7 @@ subroutine new_position(EE, DeltaE)
           if ( rnd < Exp(-Beta*DeltaE) ) then
             pos(ip,1:3) = pos_ip1(1:3) 
             EE = EE + DeltaE
-            if ( ip < Npe ) then
+            if ( ip <= Npe ) then
               do i = 1, bn
                 bond_numb( monbd( ip, i ) ) = new_bonds(i)
               end do
@@ -456,13 +456,13 @@ subroutine new_position(EE, DeltaE)
       yp1 = ipy(iy)
       zp2 = ip2z(iz)
       testlat = latt(ix,iy,zp2)  + latt(xp1,iy,zp2) + &
-                latt(ix,yp1,zp2) + latt(xp1,yp1,zp2)
+         &      latt(ix,yp1,zp2) + latt(xp1,yp1,zp2)
       if( testlat == 0 ) then
         call Delta_Energy(DeltaE)
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
-          if ( ip < Npe ) then
+          if ( ip <= Npe ) then
             do i = 1, bn
               bond_numb( monbd( ip, i ) ) = new_bonds(i)
             end do
@@ -480,7 +480,7 @@ subroutine new_position(EE, DeltaE)
           if ( rnd < Exp(-Beta*DeltaE) ) then
             pos(ip,1:3) = pos_ip1(1:3) 
             EE = EE + DeltaE
-            if ( ip < Npe ) then
+            if ( ip <= Npe ) then
               do i = 1, bn
                 bond_numb( monbd( ip, i ) ) = new_bonds(i)
               end do
@@ -500,14 +500,15 @@ subroutine new_position(EE, DeltaE)
       xp1 = ipx(ix)
       yp1 = ipy(iy)
       zm1 = imz(iz)
+      zp1 = ipz(iz)
       testlat = latt(ix,iy,zm1)  + latt(xp1,iy,zm1) + &
-                latt(ix,yp1,zm1) + latt(xp1,yp1,zm1)
+       &        latt(ix,yp1,zm1) + latt(xp1,yp1,zm1)
       if( testlat == 0 ) then
         call Delta_Energy(DeltaE)
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
-          if ( ip < Npe ) then
+          if ( ip <= Npe ) then
             do i = 1, bn
               bond_numb( monbd( ip, i ) ) = new_bonds(i)
             end do
@@ -516,16 +517,16 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,iy,zm1)  = 1 
           latt(ix,yp1,zm1)  = 1 
           latt(xp1,yp1,zm1) = 1 
-          latt(ix,iy,iz)    = 0 
-          latt(xp1,iy,iz)   = 0 
-          latt(ix,yp1,iz)   = 0 
-          latt(xp1,yp1,iz)  = 0 
+          latt(ix,iy,zp1)   = 0 
+          latt(xp1,iy,zp1)  = 0 
+          latt(ix,yp1,zp1)  = 0 
+          latt(xp1,yp1,zp1) = 0 
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
             pos(ip,1:3) = pos_ip1(1:3) 
             EE = EE + DeltaE
-            if ( ip < Npe ) then
+            if ( ip <= Npe ) then
               do i = 1, bn
                 bond_numb( monbd( ip, i ) ) = new_bonds(i)
               end do
@@ -534,14 +535,19 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,iy,zm1)  = 1 
             latt(ix,yp1,zm1)  = 1 
             latt(xp1,yp1,zm1) = 1 
-            latt(ix,iy,iz)    = 0 
-            latt(xp1,iy,iz)   = 0 
-            latt(ix,yp1,iz)   = 0 
-            latt(xp1,yp1,iz)  = 0 
+            latt(ix,iy,zp1)   = 0 
+            latt(xp1,iy,zp1)  = 0 
+            latt(ix,yp1,zp1)  = 0 
+            latt(xp1,yp1,zp1) = 0 
           end if
         end if
       end if
     end select
+!     summ = 0
+!     do i = 1, 401
+!       summ = summ + sum(latt(:,:,i))
+!     end do
+!     write(*,*) summ
   end if
 
 end subroutine new_position

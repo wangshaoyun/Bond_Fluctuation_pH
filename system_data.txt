@@ -5,10 +5,10 @@
 -1              ! qq:       charge of PE
 2               ! arm: number of arm in star brushes
 15              ! Nma: number of monomers of each arm
-1               ! Nga: grafting number of star brushes
+16               ! Nga: grafting number of star brushes
 3               ! man_s: Manning effect : every 'man' particle have one charge
-2000000          ! StepNum0
-2000000         ! StepNum:  steps of running
+200000          ! StepNum0
+200000         ! StepNum:  steps of running
 2               ! DeltaStep1: height
 2000             ! DeltaStep2: histogram
 20000            ! DeltaStep3: write data
