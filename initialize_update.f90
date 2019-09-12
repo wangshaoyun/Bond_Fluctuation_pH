@@ -338,7 +338,8 @@ subroutine new_position(EE, DeltaE)
           latt(xm1,yp1,zp1) = 1 
           latt(xp1,iy,iz)   = 0 
           latt(xp1,yp1,iz)  = 0 
-          latt(xp1,iy,zp1)  = 0 
+          latt(xp1,iy,zp1)  = 0
+          latt(xp1,yp1,zp1) = 0  
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then

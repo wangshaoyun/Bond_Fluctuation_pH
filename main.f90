@@ -51,10 +51,10 @@ implicit none
   if ( i <= StepNum0 ) then
     do step=i, StepNum0
       call monte_carlo_move(EE, DeltaE)
-!       if ( mod(step,DeltaStep1) == 0 ) then
-!         call height
-!         call write_height(step)
-!       end if
+      if ( mod(step,DeltaStep1) == 0 ) then
+        call compute_physical_quantities
+        call write_physical_quantities( step )
+      end if
       if ( mod(step,DeltaStep3) == 0 ) then
         call write_pos1
       end if
@@ -65,10 +65,10 @@ implicit none
   !################running###############!
   do step=i,StepNum0+StepNum            
     call monte_carlo_move(EE, DeltaE)
-!     if ( mod(step,DeltaStep1) == 0 ) then
-!       call height
-!       call write_height(step)
-!     end if
+    if ( mod(step,DeltaStep1) == 0 ) then
+      call compute_physical_quantities
+      call write_physical_quantities( step )
+    end if
     if ( mod(step,DeltaStep2) == 0 ) then     
       call histogram
     end if

@@ -3,15 +3,11 @@ implicit none
 
 save
 
-    integer, allocatable, dimension(:,:)  :: hist1   !brushes distribution
-!   real*8, allocatable, dimension(:,:)  :: hist2   !height distribution
-!   real*8, allocatable, dimension(:,:)  :: hist3   !ions distribution
-!   real*8, allocatable, dimension(:,:)  :: hist4   !cos distribution
-!   real*8, allocatable, dimension(:,:)  :: hist5   !max height distribution
-!   real*8, allocatable, dimension(:,:)  :: hist6   !polar angle distribution
-!   integer, allocatable, dimension(:,:) :: hist7   !top view of monomer
-!   integer, allocatable, dimension(:,:) :: hist8   !side view of monomer
-!   integer, allocatable, dimension(:,:) :: hist9   !side view of counterion
+  real*8 :: hh
+
+  integer, allocatable, dimension(:,:), private :: phi_s
+  integer, allocatable, dimension(:,:), private :: phi_sb
+  integer, allocatable, dimension(:,:), private :: phi_se
 
 contains
 
@@ -273,24 +269,12 @@ subroutine data_allocate
 
   !
   !Allocate arrays and initialize them
-  allocate( hist1(Lz, 2)        )
-!   allocate( hist2(SizeHist, 2)        )
-!   allocate( hist3(SizeHist, 2)        )
-!   allocate( hist4(Nml, 2)             )
-!   allocate( hist5(SizeHist, 2)        )
-!   allocate( hist6(SizeHist, 2)        )
-!   allocate( hist7(SizeHist, SizeHist) )
-!   allocate( hist8(SizeHist, SizeHist) )
-!   allocate( hist9(SizeHist, SizeHist) )
-  hist1=0
-!   hist2=0
-!   hist3=0
-!   hist4=0
-!   hist5=0
-!   hist6=0
-!   hist7=0
-!   hist8=0
-!   hist9=0        
+  allocate( phi_s(Lz, 2) )
+  allocate( phi_sb(Lz,2) )
+  allocate( phi_se(Lz,2) )  
+  phi_s = 0
+  phi_sb = 0
+  phi_se = 0 
 
 end subroutine data_allocate
 
@@ -303,6 +287,7 @@ subroutine continue_read_data(l)
   implicit none
   integer, intent(out) :: l
   integer :: i, j 
+  integer, allocatable, dimension(:,:) :: phi
 
 !   open(20,file='./data/pos1.txt')
 !     read(20,*) ((pos(i,j),j=1,4),i=1,NN)
@@ -312,32 +297,11 @@ subroutine continue_read_data(l)
 !     read(19,*) l
 !     read(19,*) total_time
 !   close(19)
-  open(22,file='./data/hist1.txt')
-!   open(23,file='./data/hist2.txt')
-!   open(24,file='./data/hist3.txt')
-!   open(25,file='./data/hist4.txt')
-!   open(26,file='./data/hist5.txt')
-!   open(27,file='./data/hist6.txt')
-!   open(28,file='./data/hist7.txt')
-!   open(29,file='./data/hist8.txt')
-!   open(30,file='./data/hist9.txt')
-    read(22,*) ((hist1(i,j),j=1,2),i=1,Lz)
-!     read(23,*) ((hist2(i,j),j=1,2),i=1,SizeHist)
-!     read(24,*) ((hist3(i,j),j=1,2),i=1,SizeHist)
-!     read(25,*) ((hist4(i,j),j=1,2),i=1,Nml)
-!     read(26,*) ((hist5(i,j),j=1,2),i=1,SizeHist)
-!     read(27,*) ((hist6(i,j),j=1,2),i=1,SizeHist)
-!     read(28,*) ((hist7(i,j),j=1,SizeHist),i=1,SizeHist)
-!     read(29,*) ((hist8(i,j),j=1,SizeHist),i=1,SizeHist)
-!     read(30,*) ((hist9(i,j),j=1,SizeHist),i=1,SizeHist)
-!   close(30)
-!   close(29)
-!   close(28)
-!   close(27)
-!   close(26)
-!   close(25)
-!   close(24)
-!   close(23)
+  open(22,file='./data/phi.txt')
+    read(22,*) ((phi(i,j),j=1,4),i=1,Lz)
+      phi_s(:,2) = phi(:,2)
+      phi_sb(:,2) = phi(:,3)
+      phi_se(:,2) = phi(:,4)
   close(22)
 end subroutine continue_read_data
 
@@ -486,6 +450,29 @@ subroutine initialize_move
 end subroutine initialize_move
 
 
+subroutine compute_physical_quantities
+  !----------------------------------------!
+  !
+  !input:
+  !  pos
+  !output:
+  !  Rg, Rgz, RR2, RR2z, hh, hh_max
+  !External Variables:
+  !  Ngl, Nml, Npe, NN,
+  !----------------------------------------!
+  use global_variables
+  implicit none
+  integer i
+  
+  hh = 0
+  do i = 1, Npe
+    hh = hh + pos(i,3)
+  end do
+  hh = hh / Npe
+  
+end subroutine compute_physical_quantities
+
+
 subroutine histogram
   !----------------------------------------!
   !input:
@@ -502,15 +489,19 @@ subroutine histogram
   real*8 rsqr, max_h, theta, rr
   
   !
-  !hist1
+  !star
   do i=1, Npe
     if ( mod(i,(arm*Nma+1))==1 .and. i<=Npe ) cycle
     k = pos(i,3)
-    if ( k<=0 .or. k>Lz ) then
-      write(*,*) 'Wrong in histogram1'
-      cycle
-    end if
-    hist1(k,2) = hist1(k,2) + 1
+    phi_s(k,2) = phi_s(k,2) + 1
+  end do
+  do i = 1, Nga
+    j = pos((i-1)*(arm*Nma+1)+Nma+1,3)
+    phi_sb(j,2) = phi_sb(j,2) + 1
+    do j = 2, arm
+      k = pos((i-1)*(arm*Nma+1)+Nma+1+(arm-1)*Nma,3)
+      phi_se(k,2) = phi_se(k,2) + 1
+    end do
   end do
 !   !
 !   !hist2
@@ -709,28 +700,12 @@ subroutine write_hist
   implicit none
   integer i,j
   
-  open(34,file='./data/hist1.txt')
-!   open(35,file='./data/hist2.txt')
-!   open(36,file='./data/hist3.txt')
-!   open(37,file='./data/hist5.txt')
-!   open(38,file='./data/hist6.txt')
+  open(34,file='./data/phi.txt')
     do i=1,Lz
-      write(34,340) i, hist1(i,2)
-!       hist2(i,1)=i*Lz/SizeHist
-!       write(35,340) hist2(i,1), hist2(i,2)
-!       hist3(i,1)=i*Lz/SizeHist
-!       write(36,340) hist3(i,1), hist3(i,2)
-!       hist5(i,1)=i*Lz/SizeHist
-!       write(37,340) hist5(i,1), hist5(i,2)
-!       hist6(i,1)=i*pi/2/SizeHist
-!       write(38,340) hist6(i,1), hist6(i,2)
+      write(34,340) i, phi_s(i,2), phi_sb(i,2), phi_se(i,2)
     end do
-    340 format(2I10)
+    340 format(4I10)
   close(34)
-!   close(35)
-!   close(36)
-!   close(37)
-!   close(38)
 
 !   open(39,file='./data/hist4.txt')
 !     do i=1,Nml
@@ -776,6 +751,22 @@ subroutine write_time(time)
   close(10)
 
 end subroutine write_time
+
+
+subroutine write_physical_quantities(j)
+  !----------------------------------------!
+  !
+  !----------------------------------------!
+  use global_variables
+  implicit none
+  integer, intent(in) :: j
+  
+  open(36,position='append', file='./data/height.txt')
+    write(36,360) 1.*j, hh
+    360 format(2F15.6)
+  close(36)
+
+end subroutine write_physical_quantities
 
 
 end module input_output
