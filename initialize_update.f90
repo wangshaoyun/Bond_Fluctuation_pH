@@ -118,21 +118,50 @@ subroutine uniform_star_brushes
   end do
 
   !the vortexes of the lattice with particle are occupied
-  do i = 1, Npe
-    xi = pos(i,1)
-    yi = pos(i,2)
-    zi = pos(i,3)
-    xp = ipx(xi)
-    yp = ipy(yi)
-    zp = ipz(zi)
-    latt(xi,yi,zi) = 1
-    latt(xi,yi,zp) = 1
-    latt(xi,yp,zi) = 1
-    latt(xi,yp,zp) = 1
-    latt(xp,yi,zi) = 1
-    latt(xp,yi,zp) = 1
-    latt(xp,yp,zi) = 1
-    latt(xp,yp,zp) = 1
+  do j = 1, Nga
+    k = 1
+    do l = 1, Nma + 1
+      i = (j-1)*Ns + l
+      xi = pos(i,1)
+      yi = pos(i,2)
+      zi = pos(i,3)
+      xp = ipx(xi)
+      yp = ipy(yi)
+      zp = ipz(zi)
+      latt(xi,yi,zi) = 1
+      latt(xi,yi,zp) = 1
+      latt(xi,yp,zi) = 1
+      latt(xi,yp,zp) = 1
+      latt(xp,yi,zi) = 1
+      latt(xp,yi,zp) = 1
+      latt(xp,yp,zi) = 1
+      latt(xp,yp,zp) = 1
+      if ( mod(l-1,man_s)==0 .and. l/=1 ) then
+        pos(i,4) = qq
+      end if
+    end do
+    do k = 2, arm
+      do l = 1, Nma
+        i = (j-1)*Ns + (Nma + 1) + ((k-2) * Nma) + l
+        xi = pos(i,1)
+        yi = pos(i,2)
+        zi = pos(i,3)
+        xp = ipx(xi)
+        yp = ipy(yi)
+        zp = ipz(zi)
+        latt(xi,yi,zi) = 1
+        latt(xi,yi,zp) = 1
+        latt(xi,yp,zi) = 1
+        latt(xi,yp,zp) = 1
+        latt(xp,yi,zi) = 1
+        latt(xp,yi,zp) = 1
+        latt(xp,yp,zi) = 1
+        latt(xp,yp,zp) = 1
+        if ( mod(l,man_s)==0 ) then
+          pos(i,4) = qq
+        end if
+      end do
+    end do
   end do
 
   !the above and bottom plates are occupied
@@ -174,7 +203,6 @@ subroutine initialize_ions
         pos(i,1) = xi
         pos(i,2) = yi
         pos(i,3) = zi
-        pos(i,4) = -qq
         latt(xi,yi,zi) = 1
         latt(xi,yi,zp) = 1
         latt(xi,yp,zi) = 1
@@ -186,6 +214,13 @@ subroutine initialize_ions
         test = .false.
       end if
     end do
+    if (i<=Npe+Nq_PE*abs(qq)) then
+      pos(i,4) = - qq / abs(qq)
+    elseif (i>NN-Nq_salt_ions) then
+      pos(i,4) = qqi
+    else
+      pos(i,4) = - qqi / abs(qqi)
+    end if
   end do
 
 end subroutine initialize_ions
@@ -210,12 +245,10 @@ subroutine choose_particle
   use global_variables
   implicit none
   real*8 :: rnd
-  integer :: Ns
 
   call random_number(rnd)
   ip = floor(rnd*NN) + 1
 
-  Ns = arm*Nma+1
   !
   !The monomer anchored on the plate can't move, so we need to choose again.
   do while( mod(ip,Ns) == 1 .and. ip <= Npe )

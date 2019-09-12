@@ -65,6 +65,8 @@ subroutine read_data
     read(10,*) sigmag   
     read(10,*) Beta       
     read(10,*) qq
+    read(10,*) qqi
+    read(10,*) ion_ratio
     read(10,*) arm
     read(10,*) Nma
     read(10,*) Nga
@@ -96,26 +98,37 @@ subroutine data_operation
   use global_variables
   implicit none
   logical alive
-  integer :: i, nx, dLx
+  integer :: i, nx, dLx, Charge_ions
 
   !
+  !Monomers of each star
+  Ns = Nma*arm + 1
+  !
   !The total monomers of star brushes
-  Npe = ( Nma*arm + 1 ) * Nga
+  Npe = Ns * Nga
   !
   !The total charged monomers on PE
   if ( abs(qq) == 0 ) then
     Nq_PE = 0
   else
     if ( man_s /= 0) then
-      Nq_PE = Nma / man_s * arm * Nga
+      Nq_PE = Nma / man_s * arm * Nga ! the anchored particle without charge
     else
-      Nq_PE = 0
+      Nq_PE = 0 
     end if
   end if
-
+  !
+  !the number of Salt monomers
+  if ( abs(qqi) == 0 ) then
+    Nq_salt_ions = 0
+  else
+    Charge_ions  = nint( ion_ratio * Nq_PE * abs(qq) )
+    Nq_salt_ions = Charge_ions / abs(qqi)
+  end if
+  !
   !The total charged particles Nq and total particles NN in system
-  Nq = Nq_PE * 2
-  NN = Npe + Nq_PE
+  Nq = Nq_PE * ( abs(qq)+1 ) + Nq_salt_ions * ( abs(qqi) + 1 )
+  NN = Npe + Nq_PE * abs(qq) + Nq_salt_ions * ( abs(qqi) + 1 )
   !
   !System size, keep mod(Lx,nx)=0
   Lx = nint(sqrt( Nga / sigmag )) * 2
@@ -163,13 +176,16 @@ subroutine write_data
   write(*,*) 'Grafting density,                   sigmag:', sigmag
   write(*,*) 'Beta=1/kT,                            Beta:', Beta
   write(*,*) 'Charges of polymer,                     qq:', qq
+  write(*,*) 'Charges of salt ions,                  qqi:', qqi
   write(*,*) 'Arms of star brushes                   Arm:', arm
   write(*,*) 'Monomers of each arm                   Nma:', Nma
   write(*,*) 'Number of grafted star chains          Nga:', Nga
   write(*,*) 'Each man_s monomers with one charge, man_s:', man_s
   write(*,*) 'total particles,                        NN:', NN
   write(*,*) 'total charged particles,                Nq:', Nq
+  write(*,*) 'total charged particles in polymer,  Nq_PE:', Nq_PE
   write(*,*) 'total brushes particles,               Npe:', Npe
+  write(*,*) 'total charged salt particles: Nq_salt_ions:', Nq_salt_ions
   write(*,*) 'Lattice number in x direction,          Lx:', Lx
   write(*,*) 'Lattice number in y direction,          Ly:', Ly
   write(*,*) 'Lattice number in z direction,          Lz:', Lz
@@ -289,14 +305,14 @@ subroutine continue_read_data(l)
   integer :: i, j 
   integer, allocatable, dimension(:,:) :: phi
 
-!   open(20,file='./data/pos1.txt')
-!     read(20,*) ((pos(i,j),j=1,4),i=1,NN)
-!   close(20)
-!   open(19,file='./start_time.txt')
-!     read(19,*)
-!     read(19,*) l
-!     read(19,*) total_time
-!   close(19)
+  open(20,file='./data/pos1.txt')
+    read(20,*) ((pos(i,j),j=1,4),i=1,NN)
+  close(20)
+  open(19,file='./start_time.txt')
+    read(19,*)
+    read(19,*) l
+    read(19,*) total_time
+  close(19)
   open(22,file='./data/phi.txt')
     read(22,*) ((phi(i,j),j=1,4),i=1,Lz)
       phi_s(:,2) = phi(:,2)
@@ -515,7 +531,7 @@ subroutine histogram
 !   end do
 !   !
 !   !hist3
-!   do i = 1, Ngl*nint(abs(qq))
+!   do i = 1, Ngl*abs(qq)
 !     k = ceiling( pos(Ngl*Nml+i,3) / (Lz/SizeHist) )
 !     if ( k<=0 .or. k>SizeHist ) then
 !       write(*,*) 'Wrong in histogram3'
@@ -646,22 +662,23 @@ subroutine write_pos
     end do
   close(100)
 
-  open(100,file='./data/latt.txt')
-    do i = 1, Lx
-      do j = 1, Ly
-        do k = 1, Lz+1
-          write(100,'(4I6)') i,j,k,latt(i,j,k)
-        end do
-      end do
-    end do
-  close(100)
+!   open(100,file='./data/latt.txt')
+!     do i = 1, Lx
+!       do j = 1, Ly
+!         do k = 1, Lz+1
+!           write(100,'(4I6)') i,j,k,latt(i,j,k)
+!         end do
+!       end do
+!     end do
+!   close(100)
 
 end subroutine write_pos
 
-subroutine write_pos1
+subroutine write_pos1(l)
   use global_variables
   implicit none
   integer :: i, j, k
+  integer, intent(in) :: l
 
   open(100,file='./data/pos1.txt')
     do i = 1, NN
@@ -675,15 +692,27 @@ subroutine write_pos1
     end do
   close(100)
 
-  open(100,file='./data/latt1.txt')
-    do i = 1, Lx
-      do j = 1, Ly
-        do k = 1, Lz+1
-          write(100,'(4I6)') i,j,k,latt(i,j,k)
-        end do
-      end do
-    end do
-  close(100)
+  open(32,file='./start_time.txt')
+    write(32,*) 1
+    write(32,*) l
+    call cpu_time(finished)
+    total_time=total_time+finished-started
+    call cpu_time(started)
+    write(32,*) total_time
+    write(32,*) 'time:(minutes)', real(total_time/60)
+    write(32,*) 'time:(hours)', real(total_time/3600)
+    write(32,*) 'time:(days)', real(total_time/86400)
+  close(32)
+
+!   open(100,file='./data/latt1.txt')
+!     do i = 1, Lx
+!       do j = 1, Ly
+!         do k = 1, Lz+1
+!           write(100,'(4I6)') i,j,k,latt(i,j,k)
+!         end do
+!       end do
+!     end do
+!   close(100)
 
 end subroutine write_pos1
 

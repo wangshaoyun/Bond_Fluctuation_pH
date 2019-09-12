@@ -11,18 +11,22 @@ save
   integer :: arm      !Arms of star brushes
                       !including the chains anchored to the plate
   integer :: Nma      !Monomers of each arm
+  integer :: Ns       !Monomers of each star
   integer :: Nga      !Number of star chains grafted on plate
   integer :: Nq       !Total charge in the system, ions + aions
   integer :: Nq_PE    !Charged monomers of PE
   integer :: Nq_net   !Net charged monomers of PE, or protonated monomers
   integer :: NN       !Total particles in the system
   integer :: NN_net   !Net particles in system
+  integer :: Nq_salt_ions !Charged salt ions, which not include anions.
   integer :: man_s    !Manning effect: star chains
   integer :: Lx       !Lattice number in x direction
   integer :: Ly       !Lattice number in y direction
   integer :: Lz       !Lattice number between two plate
   integer :: N_bond   !Number of all bonds in system
   integer :: qq       !Charge of charged monomers
+  integer :: qqi      !Charge of salt ions
+  real*8  :: ion_ratio!Ratio of salt ions to the charge quantites of PE
   real*8  :: Z_empty  !Empty space ratio of height and length in slab geometry
   real*8  :: sigmag   !Grafting density of brushes on the plate
   real*8  :: Beta     !Beta=1/(kB*T), T is temperature, 

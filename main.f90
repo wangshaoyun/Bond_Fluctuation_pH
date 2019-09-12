@@ -28,7 +28,7 @@ implicit none
     !initialize position  
     call initialize_position
     call write_pos
-    call write_pos1
+    call write_pos1(i)
 !     !
 !     !Construct the real verlet list and real_point vector
 !     call construct_cell_list
@@ -56,7 +56,7 @@ implicit none
         call write_physical_quantities( step )
       end if
       if ( mod(step,DeltaStep3) == 0 ) then
-        call write_pos1
+        call write_pos1(step)
       end if
     end do
     i=step
@@ -73,7 +73,7 @@ implicit none
       call histogram
     end if
     if ( mod(step,DeltaStep3) == 0 ) then
-      call write_pos1                   
+      call write_pos1(step)               
       call write_hist
     end if
   end do
@@ -85,4 +85,6 @@ implicit none
   write(*,*) 'Finished!'
 
 end program main
+
+
 
