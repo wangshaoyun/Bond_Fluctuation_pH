@@ -7,7 +7,7 @@
 0.1             ! ion_ratio
 2               ! arm: number of arm in star brushes
 10              ! Nma: number of monomers of each arm
-4              ! Nga: grafting number of star brushes
+4               ! Nga: grafting number of star brushes
 3               ! man_s: Manning effect : every 'man' particle have one charge
 200000          ! StepNum0
 200000          ! StepNum:  steps of running
