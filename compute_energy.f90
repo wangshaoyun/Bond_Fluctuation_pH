@@ -71,7 +71,6 @@ save
   !Coulomb energy of i,j in real space
   real,  allocatable, dimension(:,:,:), private :: real_ij 
 
-
 contains 
 
 subroutine initialize_energy_parameter
@@ -120,37 +119,19 @@ subroutine read_force_parameters
     read(10,*) tau_rf
   close(10)
 
-!   allocate(fourier_ij(-260:260,-260:260,1:Lz))
-!   m = 521*521*Lz
-!   open(100, file='./data/fourier.txt') 
-!     do i = 1, m
-!       read(100,*) j, k, l, rl
-!       fourier_ij(j,k,l) = rl
-!     end do
-!   close(100)
-
-!   n = 2*nint(rcc)
-!   allocate(real_ij(-n:n,-n:n,-n:n))
-!   n = (n+1)*(n+1)*(n+1)
-!   open(100, file ='./data/real.txt')
-!     do i = 1, n
-!       read(100,*) j,k,l,rl
-!       real_ij(j,k,l) = rl
-!     end do
-!   close(100)
-
 end subroutine read_force_parameters
 
 
 subroutine error_analysis
   use global_variables
+  use compute_energy_ewald
   implicit none
   real*8 :: EE1, EE2, absolute_error, relative_error
   real*8 :: real_time, fourier_time, time_ewald
   real*8 :: st, fn
 
   call cpu_time(st)
-  call compute_energy_Ewald(EE1)
+  call error_analysis_ewald(EE1)
   call cpu_time(fn)
   time_ewald = fn - st
 
@@ -174,15 +155,59 @@ subroutine error_analysis
 end subroutine error_analysis
 
 
-subroutine compute_energy_Ewald(EE)
+subroutine compute_energy_lookup_table(EE, rt, ft)
   use global_variables
   implicit none
   real*8, intent(out) :: EE
+  real*8, intent(out) :: rt
+  real*8, intent(out) :: fn
+  integer :: i, j, k, l, m, n, x, y, z
+  integer :: icelx, icely, icelz, ncel
 
   EE = 0
+  !
+  !real space
+  do i = 1, Nq
+    m = charge(i)
+    icelx = int(pos(m,1)/clx)
+    icely = int(pos(m,2)/cly)
+    icelz = int(pos(m,3)/clz) 
+    ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+    do j = 1, cell_near_list(ncel,28,1)
+      icelx = cell_near_list(ncel,j,1)
+      icely = cell_near_list(ncel,j,2)
+      icelz = cell_near_list(ncel,j,3)
+      k = hoc_r(icelx,icely,icelz)
+      do while(k/=0)
+        l = charge(k)
+        if (l/=i) then
+          (/x,y,z/) = pos(i,1:3) - pos(l,1:3)
+          x = periodic_x(x)
+          y = periodic_y(y)
+          if ((x*x+y*y+z*z)<rcc2) then
+            EE = EE + pos(i,4)*pos(l,4)*real_ij(x,y,z)
+          end if
+        end if
+      end do
+    end do
+  end do
 
-end subroutine compute_energy_Ewald
+  !
+  !fourier space
+  do i = 1, Nq
+    do j = 1, Nq
+      m = charge(i)
+      n = charge(j)
+      if (m/=n) then
+        (/x,y,z/) = pos(m,1:3) - pos(n,1:3)
+        x = periodic_x(x)
+        y = periodic_y(y)
+        EE = EE + pos(m,4)*pos(n,4)*fourier_ij(x,y,z)
+      end if
+    end do
+  end do
 
+end subroutine compute_energy_lookup_table
 
 
 subroutine Periodic_array
@@ -190,43 +215,43 @@ subroutine Periodic_array
   implicit none
   integer :: i
 
-  allocate(periodic_x(-Lx:Lx))
-  allocate(periodic_y(-Ly:Ly))
+  allocate(periodic_x(-Lx2:Lx2))
+  allocate(periodic_y(-Ly2:Ly2))
   Periodic_x = 0
   Periodic_y = 0
 
-  if (mod(Lx,2) == 0) then
-    do i = -Lx, Lx
-      if (i<-Lx/2) then
-        periodic_x(i) = i + Lx
-      elseif (i>=Lx/2) then
-        periodic_x(i) = i - Lx
+  if (mod(Lx2,2) == 0) then
+    do i = -Lx2, Lx2
+      if (i<-Lx2/2) then
+        periodic_x(i) = i + Lx2
+      elseif (i>=Lx2/2) then
+        periodic_x(i) = i - Lx2
       end if
     end do
   else
-    do i = -Lx, Lx
-      if (i<-Lx/2) then
-        periodic_x(i) = i + Lx
-      elseif (i>Lx/2) then
-        periodic_x(i) = i - Lx
+    do i = -Lx2, Lx2
+      if (i<-Lx2/2) then
+        periodic_x(i) = i + Lx2
+      elseif (i>Lx2/2) then
+        periodic_x(i) = i - Lx2
       end if
     end do
   end if 
 
-  if (mod(Ly,2) == 0) then
-    do i = -Ly, Ly
-      if (i<-Ly/2) then
-        periodic_y(i) = i + Ly
-      elseif (i>=Ly/2) then
-        periodic_y(i) = i - Ly
+  if (mod(Ly2,2) == 0) then
+    do i = -Ly2, Ly2
+      if (i<-Ly2/2) then
+        periodic_y(i) = i + Ly2
+      elseif (i>=Ly2/2) then
+        periodic_y(i) = i - Ly2
       end if
     end do
   else
-    do i = -Ly, Ly
-      if (i<-Ly/2) then
-        periodic_y(i) = i + Ly
-      elseif (i>Ly/2) then
-        periodic_y(i) = i - Ly
+    do i = -Ly2, Ly2
+      if (i<-Ly2/2) then
+        periodic_y(i) = i + Ly2
+      elseif (i>Ly2/2) then
+        periodic_y(i) = i - Ly2
       end if
     end do
   end if 
@@ -246,9 +271,9 @@ subroutine pre_calculate_fourier_space
   integer ( kind = 8 ) plan_forward
   integer ( kind = 8 ) plan
 
-  Kmax1 = Lx
-  Kmax2 = Ly
-  Kmax3 = nint(Lz*Z_empty)
+  Kmax1 = Lx2
+  Kmax2 = Ly2
+  Kmax3 = nint(Lz2*Z_empty)
   if ( mod(Kmax1,2) == 0 ) then
     K1_half = Kmax1 / 2
     exp_x = cmplx(cos(pi),-sin(pi))
@@ -272,6 +297,7 @@ subroutine pre_calculate_fourier_space
   end if
 
   rcc = tol*tol/pi*2
+  rcc2 = rcc*rcc
   alpha = tol / (rcc/2)                    !alpha = 2.5/3
   alpha2 = alpha * alpha 
 
@@ -319,7 +345,7 @@ subroutine pre_calculate_fourier_space
       end do
     end do
   end do
-  fourier_ij = 2*pi*8/(Lx*Ly*Lz*Z_empty)*fourier_ij
+  fourier_ij = lb/beta*2*pi*8/(Lx*Ly*Lz*Z_empty)*fourier_ij
   deallocate(FT_exp_k2)
 
 end subroutine pre_calculate_fourier_space
@@ -352,11 +378,13 @@ subroutine pre_calculate_real_space
         if ( k > nn-nn_half-1 ) then
           r = k - nn
         end if
-        rr = sqrt(1.*p**2 + 1.*q**2 + 1.*r**2)
-        real_ij(p,q,r) = erfc(alpha*rr)/rr/2
+        rr = sqrt(1.*p**2 + 1.*q**2 + 1.*r**2)/2
+        real_ij(p,q,r) = erfc(alpha*rr)/rr
       end do
     end do
   end do
+
+  real_ij = real_ij / 2 * lb / beta
 
 end subroutine pre_calculate_real_space
 
@@ -427,12 +455,12 @@ subroutine Initialize_real_cell_list
   integer :: i, j, k, l, m, n, p, q, r, x, y, z
   integer :: icelx, icely, icelz
 
-  nclx = int(1.*Lx/rcc)
-  ncly = int(1.*Ly/rcc)
-  nclz = int(1.*Lz/rcc)
-  clx = 1.*Lx/nclx
-  cly = 1.*Ly/ncly
-  clz = 1.*Lz/nclz
+  nclx = int(1.*Lx2/rcc)
+  ncly = int(1.*Ly2/rcc)
+  nclz = int(1.*Lz2/rcc)
+  clx = 1.*Lx2/nclx
+  cly = 1.*Ly2/ncly
+  clz = 1.*Lz2/nclz
   ncel = nclx*ncly*nclz
 
   allocate(hoc_r(nclx,ncly,nclz))
@@ -653,7 +681,7 @@ subroutine Delta_Energy_add(DeltaE)
       (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
       x = Periodic_x(x)
       y = Periodic_y(y)
-      if ((x*x+y*y+z*z)<rcc) then
+      if ((x*x+y*y+z*z)<rcc2) then
         EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
       end if
     end do
@@ -746,7 +774,7 @@ subroutine Delta_Energy_delete(DeltaE)
         (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
         x = Periodic_x(x)
         y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<rcc) then
+        if ((x*x+y*y+z*z)<rcc2) then
           EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
         end if
       end if
@@ -770,7 +798,7 @@ subroutine Delta_Energy_delete(DeltaE)
         (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
         x = Periodic_x(x)
         y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<rcc) then
+        if ((x*x+y*y+z*z)<rcc2) then
           EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
         end if
       end if
@@ -904,7 +932,6 @@ subroutine update_charge_cell_list_delete
   end if
 
 end subroutine update_charge_cell_list_delete
-
 
 
 end module compute_energy

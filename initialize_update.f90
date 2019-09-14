@@ -36,7 +36,7 @@ subroutine uniform_star_brushes
   integer, dimension(6,4) :: bond_vector
 
   nx = nint( sqrt(1.*Nga) )
-  dLx = Lx / nx
+  dLx = Lx2 / nx
   !up, bond_vector is bond number in bonds array by looking up bonds.txt
   bond_vector(1,1) = 0
   bond_vector(1,2) = 0
@@ -87,11 +87,11 @@ subroutine uniform_star_brushes
         base1 = base + Nma + 1      
         base2 = base1 + (m-2) * Nma 
         pos(base2+1, :) = pos(base1, :) + bond_vector(m-1,1:3)
-        if (pos(base2+1, 1)>Lx) then
-          pos(base2+1,1) = pos(base2+1,1)-Lx
+        if (pos(base2+1, 1)>Lx2) then
+          pos(base2+1,1) = pos(base2+1,1)-Lx2
         end if
         if (pos(base2+1, 2)>Ly) then
-          pos(base2+1,2) = pos(base2+1,2)-Ly
+          pos(base2+1,2) = pos(base2+1,2)-Ly2
         end if
         bond_numb(base2+1-l) = bond_vector(m,4)
         monbd(base1,m) = base2 + 1 - l     
@@ -165,10 +165,10 @@ subroutine uniform_star_brushes
   end do
 
   !the above and bottom plates are occupied
-  do i = 1, Lx
-    do j = 1, Ly
+  do i = 1, Lx2
+    do j = 1, Ly2
       latt(i,j,1) = 1
-      latt(i,j,Lz+1) = 1
+      latt(i,j,Lz2+1) = 1
     end do
   end do
 
@@ -188,9 +188,9 @@ subroutine initialize_ions
     test=.true.
     do while (test)
       call random_number(rnd)
-      xi = floor(rnd(1)*Lx) + 1
-      yi = floor(rnd(2)*Ly) + 1
-      zi = floor(rnd(3)*Lz) + 1
+      xi = floor(rnd(1)*Lx2) + 1
+      yi = floor(rnd(2)*Ly2) + 1
+      zi = floor(rnd(3)*Lz2) + 1
       xp = ipx(xi)
       yp = ipy(yi)
       zp = ipz(zi)
@@ -276,9 +276,9 @@ subroutine add_particle
   pos_ip0i = pos(ip1,:)
 
   call random_number(rnd)
-  pos_ip1i(1) = floor(rnd(1)*Lx)+1
-  pos_ip1i(2) = floor(rnd(2)*Ly)+1
-  pos_ip1i(3) = floor(rnd(3)*Lz)+1
+  pos_ip1i(1) = floor(rnd(1)*Lx2)+1
+  pos_ip1i(2) = floor(rnd(2)*Ly2)+1
+  pos_ip1i(3) = floor(rnd(3)*Lz2)+1
   pos_ip1i(4) = -qq/abs(qq)
   pos_ip1 = pos_ip0
   pos_ip1(4) = qq

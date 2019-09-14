@@ -20,9 +20,12 @@ save
   integer :: NN_net   !Net particles in system
   integer :: Nq_salt_ions !Charged salt ions, which not include anions.
   integer :: man_s    !Manning effect: star chains
-  integer :: Lx       !Lattice number in x direction
-  integer :: Ly       !Lattice number in y direction
-  integer :: Lz       !Lattice number between two plate
+  real*8  :: Lx       !length in x direction
+  real*8  :: Ly       !length number in y direction
+  real*8  :: Lz       !length number between two plate
+  integer :: Lx2      !Lattice number in x direction
+  integer :: Ly2      !Lattice number in y direction
+  integer :: Lz2      !Lattice number between two plate
   integer :: N_bond   !Number of all bonds in system
   integer :: qq       !Charge of charged monomers
   integer :: qqi      !Charge of salt ions
@@ -114,15 +117,15 @@ subroutine periodic_condition(rr)
   implicit none
   integer, intent(inout) :: rr(2)
 
-  if ( rr(1) > Lx ) then
-    rr(1) = rr(1) - Lx
+  if ( rr(1) > Lx2 ) then
+    rr(1) = rr(1) - Lx2
   elseif( rr(1) <= 0 ) then
-    rr(1) = rr(1) + Lx
+    rr(1) = rr(1) + Lx2
   end if
-  if ( rr(2) > Ly ) then
-    rr(2) = rr(2) - Ly
+  if ( rr(2) > Ly2 ) then
+    rr(2) = rr(2) - Ly2
   elseif( rr(2) <= 0 ) then
-    rr(2) = rr(2) + Ly
+    rr(2) = rr(2) + Ly2
   end if
 
 end subroutine periodic_condition

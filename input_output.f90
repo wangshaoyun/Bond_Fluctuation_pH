@@ -60,7 +60,7 @@ subroutine read_data
   !
   !read system data
   open(10,file='./system_data.txt')
-    read(10,*) Lz
+    read(10,*) Lz2
     read(10,*) Z_empty  
     read(10,*) sigmag   
     read(10,*) Beta       
@@ -132,11 +132,14 @@ subroutine data_operation
   NN = Npe + Nq_PE * abs(qq) + Nq_salt_ions * ( abs(qqi) + 1 )
   !
   !System size, keep mod(Lx,nx)=0
-  Lx = nint(sqrt( Nga / sigmag )) * 2
+  Lx2 = nint(sqrt( Nga / sigmag )) * 2
   nx = nint( sqrt(1.*Nga) )
-  Lx = Lx - mod( Lx, nx )
-  Ly = Lx
-  Z_empty = ( 1.*Lz + 1.*Lz * Z_empty ) / (1.*Lz)
+  Lx2 = Lx2 - mod( Lx2, nx )
+  Ly2 = Lx2
+  Z_empty = ( 1.*Lz2 + 1.*Lz2 * Z_empty ) / (1.*Lz2)
+  Lx = Lx2/2.D0
+  Ly = Ly2/2.D0
+  Lz = Lz2/2.D0
   !
   !number of bonds in system
   N_bond = Nma * arm * Nga
@@ -187,9 +190,9 @@ subroutine write_data
   write(*,*) 'total charged particles in polymer,  Nq_PE:', Nq_PE
   write(*,*) 'total brushes particles,               Npe:', Npe
   write(*,*) 'total charged salt particles: Nq_salt_ions:', Nq_salt_ions
-  write(*,*) 'Lattice number in x direction,          Lx:', Lx
-  write(*,*) 'Lattice number in y direction,          Ly:', Ly
-  write(*,*) 'Lattice number in z direction,          Lz:', Lz
+  write(*,*) 'Lattice number in x direction,         Lx2:', Lx2
+  write(*,*) 'Lattice number in y direction,         Ly2:', Ly2
+  write(*,*) 'Lattice number in z direction,         Lz2:', Lz2
   write(*,*) 'Number of bonds in system,          N_bond:', N_bond
   write(*,*) 'pH-pKa,                             pH-pKa:', pH_pKa
   write(*,*) '****************************************************************'
@@ -232,21 +235,21 @@ subroutine data_allocate
   !
   !position, velocity, and acceleration
   allocate( pos(NN,4) )
-  allocate( latt(Lx,Ly,Lz+1) )
+  allocate( latt(Lx2,Ly2,Lz2+1) )
   pos = 0
   latt = 0
 
-  allocate( ipx(Lx) )
-  allocate( ipy(Ly) )
-  allocate( ipz(Lz) )
+  allocate( ipx(Lx2) )
+  allocate( ipy(Ly2) )
+  allocate( ipz(Lz2) )
 
-  allocate( ip2x(Lx) )
-  allocate( ip2y(Ly) )
-  allocate( ip2z(Lz) )
+  allocate( ip2x(Lx2) )
+  allocate( ip2y(Ly2) )
+  allocate( ip2z(Lz2) )
 
-  allocate( imx(Lx) )
-  allocate( imy(Ly) ) 
-  allocate( imz(Lz) )
+  allocate( imx(Lx2) )
+  allocate( imy(Ly2) ) 
+  allocate( imz(Lz2) )
 
   allocate( bonds(110,3) )
   allocate( move(109,6) )
@@ -256,39 +259,39 @@ subroutine data_allocate
   allocate( bond_numb(N_Bond) )
   monbd = 0
 
-  do i = 1, Lx
+  do i = 1, Lx2
     ipx(i) = i+1
     ip2x(i) = i+2
     imx(i) = i-1
   end do
-  ipx(Lx) = 1       !periodical boundary condition
-  ip2x(Lx-1) = 1
-  ip2x(Lx) = 2
-  imx(1) = Lx
+  ipx(Lx2) = 1       !periodical boundary condition
+  ip2x(Lx2-1) = 1
+  ip2x(Lx2) = 2
+  imx(1) = Lx2
 
-  do i = 1, Ly
+  do i = 1, Ly2
     ipy(i) = i+1
     ip2y(i) = i+2
     imy(i) = i-1
   end do
-  ipy(Ly) = 1       !periodical boundary condition
-  ip2y(Ly-1) = 1
-  ip2y(Ly) = 2
-  imy(1) = Ly
+  ipy(Ly2) = 1       !periodical boundary condition
+  ip2y(Ly2-1) = 1
+  ip2y(Ly2) = 2
+  imy(1) = Ly2
 
-  do i = 1, Lz      !finite boundary condition
+  do i = 1, Lz2      !finite boundary condition
     ipz(i) = i+1
     ip2z(i) = i+2
     imz(i) = i-1
   end do 
-  ip2z(Lz) = Lz + 1
+  ip2z(Lz2) = Lz2 + 1
   imz(1) = 1   
 
   !
   !Allocate arrays and initialize them
-  allocate( phi_s(Lz, 2) )
-  allocate( phi_sb(Lz,2) )
-  allocate( phi_se(Lz,2) )  
+  allocate( phi_s(Lz2, 2) )
+  allocate( phi_sb(Lz2,2) )
+  allocate( phi_se(Lz2,2) )  
   phi_s = 0
   phi_sb = 0
   phi_se = 0 
@@ -315,7 +318,7 @@ subroutine continue_read_data(l)
     read(19,*) total_time
   close(19)
   open(22,file='./data/phi.txt')
-    read(22,*) ((phi(i,j),j=1,4),i=1,Lz)
+    read(22,*) ((phi(i,j),j=1,4),i=1,Lz2)
       phi_s(:,2) = phi(:,2)
       phi_sb(:,2) = phi(:,3)
       phi_se(:,2) = phi(:,4)
@@ -523,7 +526,7 @@ subroutine histogram
 !   !
 !   !hist2
 !   do i = 1, Nga
-!     k = ceiling( pos((i-1)*(Nma*arm+1)+Nma+1,3) / (1.*Lz/SizeHist) )
+!     k = ceiling( pos((i-1)*(Nma*arm+1)+Nma+1,3) / (1.*Lz2/SizeHist) )
 !     if ( k<=0 .or. k>SizeHist ) then
 !       write(*,*) 'Wrong in histogram2'
 !       cycle
@@ -533,7 +536,7 @@ subroutine histogram
 !   !
 !   !hist3
 !   do i = 1, Ngl*abs(qq)
-!     k = ceiling( pos(Ngl*Nml+i,3) / (Lz/SizeHist) )
+!     k = ceiling( pos(Ngl*Nml+i,3) / (Lz2/SizeHist) )
 !     if ( k<=0 .or. k>SizeHist ) then
 !       write(*,*) 'Wrong in histogram3'
 !       cycle
@@ -557,7 +560,7 @@ subroutine histogram
 !         max_h = pos((i-1)*Nml+j,3)
 !       end if
 !     end do
-!     k = ceiling( max_h / (Lz/SizeHist) )
+!     k = ceiling( max_h / (Lz2/SizeHist) )
 !     if ( k<=0 .or. k>SizeHist ) then
 !       write(*,*) 'Wrong in histogram5'
 !       cycle
@@ -593,7 +596,7 @@ subroutine histogram
 !   do k = 1, Npe
 !     if ( mod(k,Nml)==1 .and. k<=Npe ) cycle
 !     i = ceiling( (pos(k,2)+Ly/2) / (Ly/SizeHist) )
-!     j = ceiling( pos(k,3) / (Lz/SizeHist) )
+!     j = ceiling( pos(k,3) / (Lz2/SizeHist) )
 !     if ( i<=0 .or. i>SizeHist .or. j<=0 .or. j>SizeHist ) then
 !       write(*,*) 'Wrong in histogram8'
 !       write(*,*) i, j, k, pos(k,1:3)
@@ -605,7 +608,7 @@ subroutine histogram
 !   !hist9
 !   do k = Npe+1, NN
 !     i = ceiling( (pos(k,2)+Ly/2) / (Ly/SizeHist) )
-!     j = ceiling( pos(k,3) / (Lz/SizeHist) )
+!     j = ceiling( pos(k,3) / (Lz2/SizeHist) )
 !     if ( i<=0 .or. i>SizeHist .or. j<=0 .or. j>SizeHist ) then
 !       write(*,*) 'Wrong in histogram9'
 !       cycle
@@ -646,19 +649,19 @@ subroutine write_pos
   close(100)  
 
   open(100, file='./data/ipx.txt')
-    do i = 1, Lx
+    do i = 1, Lx2
       write(100,*) imx(i),ipx(i),ip2x(i)
     end do
   close(100)
 
   open(100, file='./data/ipy.txt')
-    do i = 1, Ly
+    do i = 1, Ly2
       write(100,*) imy(i),ipy(i),ip2y(i)
     end do
   close(100)
 
   open(100, file='./data/ipz.txt')
-    do i = 1, Lz
+    do i = 1, Lz2
       write(100,*) imz(i),ipz(i),ip2z(i)
     end do
   close(100)
@@ -666,7 +669,7 @@ subroutine write_pos
 !   open(100,file='./data/latt.txt')
 !     do i = 1, Lx
 !       do j = 1, Ly
-!         do k = 1, Lz+1
+!         do k = 1, Lz2+1
 !           write(100,'(4I6)') i,j,k,latt(i,j,k)
 !         end do
 !       end do
@@ -706,9 +709,9 @@ subroutine write_pos1(l)
   close(32)
 
 !   open(100,file='./data/latt1.txt')
-!     do i = 1, Lx
-!       do j = 1, Ly
-!         do k = 1, Lz+1
+!     do i = 1, Lx2
+!       do j = 1, Ly2
+!         do k = 1, Lz2+1
 !           write(100,'(4I6)') i,j,k,latt(i,j,k)
 !         end do
 !       end do
@@ -731,7 +734,7 @@ subroutine write_hist
   integer i,j
   
   open(34,file='./data/phi.txt')
-    do i=1,Lz
+    do i=1,Lz2
       write(34,340) i, phi_s(i,2), phi_sb(i,2), phi_se(i,2)
     end do
     340 format(4I10)
@@ -768,16 +771,46 @@ subroutine write_time(time)
 
   real*8, intent(in) :: time
   open(10,file='./data/time.txt')
-    write(10,*) 'time:(seconds)', real(total_time)
-    write(10,*) 'time:(hours)  ', real(total_time/3600)
-    write(10,*) 'time:(days)   ', real(total_time/86400)
-    write(10,*) 'Lx:           ', real(Lx)
-    write(10,*) 'Ly:           ', real(Ly)
-    write(10,*) 'Lz:           ', real(Lz)
-    write(10,*) 'Nga:          ', Nga
-    write(10,*) 'Nma:          ', Nma
-    write(10,*) 'Nq:           ', Nq
-    write(10,*) 'NN:           ', NN
+    write(10,*) 'time:(seconds):', real(total_time)
+    write(10,*) 'time:(hours)  :', real(total_time/3600)
+    write(10,*) 'time:(days)   :', real(total_time/86400)
+    write(10,*) 'Lx2           :', real(Lx2)
+    write(10,*) 'Ly2           :', real(Ly2)
+    write(10,*) 'Lz2           :', real(Lz2)
+    write(10,*) 'Lx            :', Lx
+    write(10,*) 'Ly            :', Ly
+    write(10,*) 'Lz            :', Lz
+    write(10,*) 'Nga           :', Nga
+    write(10,*) 'Nma           :', Nma
+    write(10,*) 'Nq            :', Nq
+    write(10,*) 'NN            :', NN
+    write(10,*) 'Z_empty       :', Z_empty-1
+    write(10,*) 'sigmag        :', sigmag
+    write(10,*) 'Beta          :', Beta
+    write(10,*) 'qq            :', qq
+    write(10,*) 'qqi           :', qqi
+    write(10,*) 'Arm           :', arm
+    write(10,*) 'Nma           :', Nma
+    write(10,*) 'Nga           :', Nga
+    write(10,*) 'man_s         :', man_s
+    write(10,*) 'NN            :', NN
+    write(10,*) 'Nq            :', Nq
+    write(10,*) 'Nq_PE         :', Nq_PE
+    write(10,*) 'Npe           :', Npe
+    write(10,*) 'Nq_salt_ions  :', Nq_salt_ions
+    write(10,*) 'Lx2           :', Lx2
+    write(10,*) 'Ly2           :', Ly2
+    write(10,*) 'Lz2           :', Lz2
+    write(10,*) 'N_bond        :', N_bond
+    write(10,*) 'pH-pKa        :', pH_pKa
+    write(10,*) 'restart_continue:',restart_or_continue
+    write(10,*) 'StepNum0      :', StepNum0
+    write(10,*) 'StepNum       :', StepNum
+    write(10,*) 'StepNum0+StepNum:', (StepNum0+StepNum)
+    write(10,*) 'DeltaStep     :', DeltaStep
+    write(10,*) 'DeltaStep1    :', DeltaStep1
+    write(10,*) 'DeltaStep2    :', DeltaStep2
+    write(10,*) 'DeltaStep3    :', DeltaStep3
   close(10)
 
 end subroutine write_time
