@@ -29,24 +29,18 @@ implicit none
     call initialize_position
     call write_pos
     call write_pos1(i)
-!     !
-!     !Construct the real verlet list and real_point vector
-!     call construct_cell_list
-!     !
-!     !compute energy
-!     call compute_energy
-!     call write_hist    
-!   else if (restart_or_continue /= 0) then
-!     !
-!     !read position and histogram data
-!     call continue_read_data(i)
-!     !
-!     !Construct the real verlet list and real_point vector
-!     call real_verlet_list
-!     !
-!     !compute energy
-!     call compute_energy
-!   end if
+    !
+    !error analysis
+    call error_analysis
+    call write_hist    
+  else if (restart_or_continue /= 0) then
+    !
+    !read position and histogram data
+    call continue_read_data(i)
+    !
+    !error analysis
+    call error_analysis
+  end if
   !##############preheating##############!
   if ( i <= StepNum0 ) then
     do step=i, StepNum0
@@ -56,6 +50,7 @@ implicit none
         call write_physical_quantities( step )
       end if
       if ( mod(step,DeltaStep3) == 0 ) then
+        call error_analysis
         call write_pos1(step)
       end if
     end do

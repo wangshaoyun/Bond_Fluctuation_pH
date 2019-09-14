@@ -17,6 +17,9 @@ save
   real*8,  private :: clx         !length of cell in x direction
   real*8,  private :: cly         !length of cell in y direction
   real*8,  private :: clz         !length of cell in z direction
+  integer, private :: nclx        !number of cell in x direction
+  integer, private :: ncly        !number of cell in y direction
+  integer, private :: nclz        !number of cell in z direction 
   !reciprocal space
   integer, private :: Kmax1       !max wave number of x direction
   integer, private :: Kmax2       !max wave number of y direction 
@@ -26,27 +29,48 @@ save
   integer, private :: K3_half   
   integer, private :: K_total     !Total wave number in reciprocal space
   !
-  !arrays
-  real*8,  allocatable, dimension(:,:), private :: posq        
-                        !array of position of charged particle
+  !array of position of charged particle
+  integer, allocatable, dimension(:,:,:), private :: cell_near_list 
+  !
+  !charge number to monomer number        
   integer, allocatable, dimension( : )          :: charge
-                        !charge number to monomer number
-  integer, allocatable, dimension( : )          :: inv_charge
-                        !charge number to monomer number                    
-  integer, allocatable, dimension( : )          :: cell_list_q
-                        !cell list of charge
-  integer, allocatable, dimension( : )          :: inv_cell_list_q
-                        !inverse cell list of charge
-  integer, allocatable, dimension( : )          :: cell_list_r
-                        !cell list in real space
-  integer, allocatable, dimension( : )          :: inv_cell_list_r
-                        !inverse cell list in real space
-  integer, allocatable, dimension( : )          :: hoc_r     ! head of chains
-  integer, allocatable, dimension( : )          :: inv_hoc_r ! head of chains
+  !  
+  !charge number to monomer number                    
+  integer, allocatable, dimension( : ), private :: inv_charge
+  !
+  !cell list of charge
+  integer, allocatable, dimension( : ), private :: cell_list_q
+  !
+  !inverse cell list of charge
+  integer, allocatable, dimension( : ), private :: inv_cell_list_q
+  !
+  !cell list in real space
+  integer, allocatable, dimension( : ), private :: cell_list_r
+  !
+  !inverse cell list in real space
+  integer, allocatable, dimension( : ), private :: inv_cell_list_r
+  !
+  !inverse cell list in real space                      
+  integer, allocatable, dimension( : ), private :: inv_cell_list_r
+  !
+  ! head of chains
+  integer, allocatable, dimension( : ), private :: hoc_r     
+  !
+  ! head of chains
+  integer, allocatable, dimension( : ), private :: inv_hoc_r
+  !
+  ! Periodic condition
+  integer, allocatable, dimension( : ), private :: periodic_x
+  !
+  !Periodic condition  
+  integer, allocatable, dimension( : ), private :: periodic_y
+  !
+  !Coulomb energy of i,j in fourier space
   real,  allocatable, dimension(:,:,:), private :: fourier_ij 
-                        !Coulomb energy of i,j in fourier space
+  !
+  !Coulomb energy of i,j in real space
   real,  allocatable, dimension(:,:,:), private :: real_ij 
-                        !Coulomb energy of i,j in real space
+
 
 contains 
 
@@ -57,6 +81,9 @@ subroutine initialize_energy_parameter
   !
   !read force parameters from file
   call read_force_parameters
+  !
+  ! periodic condition array
+  call Periodic_array
   !
   !
   if ( qq /= 0 ) then
@@ -93,8 +120,6 @@ subroutine read_force_parameters
     read(10,*) tau_rf
   close(10)
 
-
-
 !   allocate(fourier_ij(-260:260,-260:260,1:Lz))
 !   m = 521*521*Lz
 !   open(100, file='./data/fourier.txt') 
@@ -115,6 +140,98 @@ subroutine read_force_parameters
 !   close(100)
 
 end subroutine read_force_parameters
+
+
+subroutine error_analysis
+  use global_variables
+  implicit none
+  real*8 :: EE1, EE2, absolute_error, relative_error
+  real*8 :: real_time, fourier_time, time_ewald
+  real*8 :: st, fn
+
+  call cpu_time(st)
+  call compute_energy_Ewald(EE1)
+  call cpu_time(fn)
+  time_ewald = fn - st
+
+  call compute_energy_lookup_table(EE2, real_time, fourier_time)
+
+  absolute_error = abs(EE2-EE1)
+
+  relative_error = absolute_error / EE1
+
+  write(*,*) 
+  write(*,*) '******************error_analysis********************'
+  write(*,*) 'absolute error         absolute_error:', absolute_error
+  write(*,*) 'relative error         relative_error:', relative_error
+  write(*,*) 'real time                   real_time:', real_time
+  write(*,*) 'fourier time             fourier_time:', fourier_time
+  write(*,*) 'time ewald                 time_ewald:', time_ewald
+  write(*,*) '****************************************************'
+  write(*,*) 
+  write(*,*) 
+
+end subroutine error_analysis
+
+
+subroutine compute_energy_Ewald(EE)
+  use global_variables
+  implicit none
+  real*8, intent(out) :: EE
+
+  EE = 0
+
+end subroutine compute_energy_Ewald
+
+
+
+subroutine Periodic_array
+  use global_variables
+  implicit none
+  integer :: i
+
+  allocate(periodic_x(-Lx:Lx))
+  allocate(periodic_y(-Ly:Ly))
+  Periodic_x = 0
+  Periodic_y = 0
+
+  if (mod(Lx,2) == 0) then
+    do i = -Lx, Lx
+      if (i<-Lx/2) then
+        periodic_x(i) = i + Lx
+      elseif (i>=Lx/2) then
+        periodic_x(i) = i - Lx
+      end if
+    end do
+  else
+    do i = -Lx, Lx
+      if (i<-Lx/2) then
+        periodic_x(i) = i + Lx
+      elseif (i>Lx/2) then
+        periodic_x(i) = i - Lx
+      end if
+    end do
+  end if 
+
+  if (mod(Ly,2) == 0) then
+    do i = -Ly, Ly
+      if (i<-Ly/2) then
+        periodic_y(i) = i + Ly
+      elseif (i>=Ly/2) then
+        periodic_y(i) = i - Ly
+      end if
+    end do
+  else
+    do i = -Ly, Ly
+      if (i<-Ly/2) then
+        periodic_y(i) = i + Ly
+      elseif (i>Ly/2) then
+        periodic_y(i) = i - Ly
+      end if
+    end do
+  end if 
+
+end subroutine Periodic_array
 
 
 subroutine pre_calculate_fourier_space
@@ -307,20 +424,19 @@ end subroutine Initialize_cell_list_q
 subroutine Initialize_real_cell_list
   use global_variables
   implicit none
-  integer :: i, j, k, l, m
-  integer :: nx, ny, nz
+  integer :: i, j, k, l, m, n, p, q, r, x, y, z
   integer :: icelx, icely, icelz
 
-  nx = int(1.*Lx/rcc)
-  ny = int(1.*Ly/rcc)
-  nz = int(1.*Lz/rcc)
-  clx = 1.*Lx/nx
-  cly = 1.*Ly/ny
-  clz = 1.*Lz/nz
-  ncel = nx*ny*nz
+  nclx = int(1.*Lx/rcc)
+  ncly = int(1.*Ly/rcc)
+  nclz = int(1.*Lz/rcc)
+  clx = 1.*Lx/nclx
+  cly = 1.*Ly/ncly
+  clz = 1.*Lz/nclz
+  ncel = nclx*ncly*nclz
 
-  allocate(hoc_r(nx,ny,nz))
-  allocate(inv_hoc_r(nx,ny,nz))
+  allocate(hoc_r(nclx,ncly,nclz))
+  allocate(inv_hoc_r(nclx,ncly,nclz))
   hoc_r = 0
   inv_hoc_r = 0
 
@@ -345,6 +461,44 @@ subroutine Initialize_real_cell_list
     inv_hoc_r(icelx,icely,icelz) = i
   end do
 
+  allocate(cell_near_list(nclx*ncly*nclz,28,3)))
+  cell_near_list = 0
+  m = 0
+  do i = 1, nclx
+    do j = 1, ncly
+      do k = 1, nclz
+        m = m + 1
+        n = 0
+        do p = -1, 1
+          do q = -1, 1
+            do r = -1, 1
+              x = i + p
+              y = j + q
+              z = k + r
+              if (z>0 .and. z<=nclz) then
+                n = n + 1
+                if (x>nclx) then
+                  x = x - nclx
+                elseif (x<=0) then
+                  x = x + nclx
+                end if
+                if (y>ncly) then
+                  y = y - ncly
+                elseif (y<=0) then
+                  y = y + ncly
+                end if
+                cell_near_list(m,n,1) = x
+                cell_near_list(m,n,2) = y
+                cell_near_list(m,n,3) = z
+              end if
+            end do
+          end do
+        end do
+        cell_near_list(m,28,1) = n
+      end do
+    end do
+  end do
+
 !   open(100,file='cell_list_q.txt')
 !     do i = 1, NN
 !       write(100,*) cell_list_q(i), inv_cell_list_q(i)
@@ -352,9 +506,9 @@ subroutine Initialize_real_cell_list
 !   close(100)
 
 !   open(100,file='hoc_r.txt')
-!     do i = 1, nx
-!       do j = 1, ny
-!         do k = 1, nz
+!     do i = 1, nclx
+!       do j = 1, ncly
+!         do k = 1, nclz
 !          write(100,*) hoc_r(icelx,icely,icelz),inv_hoc_r(icelx,icely,icelz)
 !         end do
 !       end do
@@ -368,10 +522,272 @@ subroutine Delta_Energy(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
+  integer :: i,j,k,x,y,z,icelx,icey,icelz,ncel
+  real*8 :: EE1,EE2,rr
+  real*8, dimension(3) :: rij
 
-  DeltaE = -1
+  DeltaE = 0
+
+  !
+  ! Fourier Space
+  EE1 = 0
+  EE2 = 0
+  j = cell_list_q(Nq+1)
+  do while (j/=0)
+    k = charge(j)
+    if (k/=ip) then
+      (/x,y,z/) = pos_ip0(1:3) - pos(k,1:3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
+
+      (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
+    end if
+  end do
+
+  DeltaE = pos_ip1(4) * (EE2-EE1)
+
+  !
+  ! Real Space
+  EE1 = 0
+  icelx = int(pos_ip0(1)/clx)
+  icely = int(pos_ip0(2)/cly)
+  icelz = int(pos_ip0(3)/clz) 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip) then
+        (/x,y,z/) = pos_ip0(1:3) - pos(k,1:3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        if ((x*x+y*y+z*z)<rcc) then
+          EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+    end do
+  end do
+  EE1 = EE1 * pos_ip1(4)
+
+  EE2 = 0
+  icelx = int(pos_ip1(1)/clx)
+  icely = int(pos_ip1(2)/cly)
+  icelz = int(pos_ip1(3)/clz) 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip) then
+        (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        if ((x*x+y*y+z*z)<rcc) then
+          EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+    end do
+  end do
+  EE2 = EE2 * pos_ip1(4)
+  DeltaE = DeltaE + EE2 - EE1
 
 end subroutine Delta_Energy
+
+
+subroutine Delta_Energy_add(DeltaE)
+  use global_variables
+  implicit none
+  real*8, intent(out) :: DeltaE
+  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icey,icelz,ncel
+  real*8 :: EE1,EE2,rr
+  real*8, dimension(3) :: rij
+
+  DeltaE = 0
+
+  !
+  ! Fourier Space
+  EE1 = 0
+  EE2 = 0
+  qq1 = pos_ip1(4)
+  qq2 = pos_ip1i(4)
+  j = cell_list_q(Nq+1)
+  do while (j/=0)
+    k = charge(j)
+    (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+    x = Periodic_x(x)
+    y = Periodic_y(y)
+    EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
+
+    (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+    x = Periodic_x(x)
+    y = Periodic_y(y)
+    EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
+  end do
+
+  DeltaE = EE1*qq1 + EE2*qq2
+
+  !
+  ! Real Space
+  EE1 = 0
+  icelx = int(pos_ip1(1)/clx)
+  icely = int(pos_ip1(2)/cly)
+  icelz = int(pos_ip1(3)/clz) 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      if ((x*x+y*y+z*z)<rcc) then
+        EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
+      end if
+    end do
+  end do
+  EE1 = EE1 * qq1
+
+  EE2 = 0
+  icelx = int(pos_ip1i(1)/clx)
+  icely = int(pos_ip1i(2)/cly)
+  icelz = int(pos_ip1i(3)/clz) 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      if ((x*x+y*y+z*z)<rcc) then
+        EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
+      end if
+    end do
+  end do
+  EE2 = EE2 * qq1
+  DeltaE = DeltaE + EE1 + EE2
+
+  !
+  !interaction of the added two particles
+  (/x,y,z/) = pos_ip1i(1:3) - pos_ip1(1:3)
+  x = Periodic_x(x)
+  y = Periodic_y(y)
+  DeltaE = DeltaE + qq1*qq2*(fourier_ij(x,y,z)+real_ij(x,y,z))
+
+end subroutine Delta_Energy_add
+
+
+subroutine Delta_Energy_delete(DeltaE)
+  use global_variables
+  implicit none
+  real*8, intent(out) :: DeltaE
+  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icey,icelz,ncel
+  real*8 :: EE1,EE2,rr
+  real*8, dimension(3) :: rij
+
+  DeltaE = 0
+
+  !
+  ! Fourier Space
+  EE1 = 0
+  EE2 = 0
+  qq1 = pos_ip1(4)
+  qq2 = pos_ip1i(4)
+  j = cell_list_q(Nq+1)
+  do while (j/=0)
+    k = charge(j)
+    if (k/=ip) then
+      (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
+    end if
+    if (k/=ip1) then
+      (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
+    end if
+  end do
+
+  DeltaE = EE1*qq1 + EE2*qq2
+
+  !
+  ! Real Space
+  EE1 = 0
+  icelx = int(pos_ip1(1)/clx)
+  icely = int(pos_ip1(2)/cly)
+  icelz = int(pos_ip1(3)/clz) 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip) then
+        (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        if ((x*x+y*y+z*z)<rcc) then
+          EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+    end do
+  end do
+  EE1 = EE1 * qq1
+
+  EE2 = 0
+  icelx = int(pos_ip1i(1)/clx)
+  icely = int(pos_ip1i(2)/cly)
+  icelz = int(pos_ip1i(3)/clz) 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip1) then
+        (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        if ((x*x+y*y+z*z)<rcc) then
+          EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+    end do
+  end do
+  EE2 = EE2 * qq1
+  DeltaE = DeltaE + EE1 + EE2
+  !
+  !interaction of the added two particles
+  (/x,y,z/) = pos_ip1i(1:3) - pos_ip1(1:3)
+  x = Periodic_x(x)
+  y = Periodic_y(y)
+  DeltaE = DeltaE - qq1*qq2*(fourier_ij(x,y,z)+real_ij(x,y,z))
+
+  DeltaE = -DeltaE
+
+end subroutine Delta_Energy_delete
 
 
 subroutine update_real_cell_list

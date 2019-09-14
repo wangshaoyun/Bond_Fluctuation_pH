@@ -252,6 +252,7 @@ end subroutine monte_carlo_move
 
 subroutine choose_particle_pH
   use global_variables
+  use compute_energy
   implicit none
   real*8 :: rnd
   integer :: i
