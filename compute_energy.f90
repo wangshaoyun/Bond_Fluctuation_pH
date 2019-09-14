@@ -14,6 +14,9 @@ save
   !real space
   real*8,  private :: rcc         !Cut off radius of real space
   real*8,  private :: rcc2        !rcc2=rcc*rcc  !
+  real*8,  private :: clx         !length of cell in x direction
+  real*8,  private :: cly         !length of cell in y direction
+  real*8,  private :: clz         !length of cell in z direction
   !reciprocal space
   integer, private :: Kmax1       !max wave number of x direction
   integer, private :: Kmax2       !max wave number of y direction 
@@ -28,6 +31,8 @@ save
                         !array of position of charged particle
   integer, allocatable, dimension( : )          :: charge
                         !charge number to monomer number
+  integer, allocatable, dimension( : )          :: inv_charge
+                        !charge number to monomer number                    
   integer, allocatable, dimension( : )          :: cell_list_q
                         !cell list of charge
   integer, allocatable, dimension( : )          :: inv_cell_list_q
@@ -42,7 +47,7 @@ save
                         !Coulomb energy of i,j in fourier space
   real,  allocatable, dimension(:,:,:), private :: real_ij 
                         !Coulomb energy of i,j in real space
-                        
+
 contains 
 
 subroutine initialize_energy_parameter
@@ -246,12 +251,23 @@ subroutine Initialize_Charge
   integer :: i, j
 
   allocate(charge(Nq))
+  allocate(inv_charge(NN))
 
   j = 0
   do i = 1, NN
     if ( pos(i,4) /= 0 ) then
       j = j + 1
       charge(j) = i
+    end if
+  end do
+
+  j = 0
+  do i = 1, NN
+    if ( pos(i,4) /=0 ) then
+      j = j + 1
+      inv_charge(i) = j
+    else
+      inv_charge(i) = 0
     end if
   end do
 
@@ -273,13 +289,10 @@ subroutine Initialize_cell_list_q
     cell_list_q(Nq+1) = i
   end do
 
-  j = cell_list_q(Nq+1)
-  k = 0
-  do while( j /= 0 )
-    k = k+1
-    inv_cell_list_q(k) = j
-    inv_cell_list_q(Nq+1) = k
-    j = cell_list_q(j)
+  inv_cell_list_q(Nq+1) = 0
+  do i = Nq, 1, -1
+    inv_cell_list_q(i) = inv_cell_list_q(N+1)
+    inv_cell_list_q(Nq+1) = i
   end do
 
 !   open(100,file='cell_list_q.txt')
@@ -297,14 +310,13 @@ subroutine Initialize_real_cell_list
   integer :: i, j, k, l, m
   integer :: nx, ny, nz
   integer :: icelx, icely, icelz
-  real*8 :: rnx,rny,rnz
 
   nx = int(1.*Lx/rcc)
   ny = int(1.*Ly/rcc)
   nz = int(1.*Lz/rcc)
-  rnx = 1.*Lx/nx
-  rny = 1.*Ly/ny
-  rnz = 1.*Lz/nz
+  clx = 1.*Lx/nx
+  cly = 1.*Ly/ny
+  clz = 1.*Lz/nz
   ncel = nx*ny*nz
 
   allocate(hoc_r(nx,ny,nz))
@@ -312,30 +324,25 @@ subroutine Initialize_real_cell_list
   hoc_r = 0
   inv_hoc_r = 0
 
-  allocate(cell_list_r(NN))
-  allocate(inv_cell_list_r(NN))
+  allocate(cell_list_r(Nq))
+  allocate(inv_cell_list_r(Nq))
 
-  do i = 1, NN
-    icelx = int(pos(i,1)/rnx)
-    icely = int(pos(i,2)/rny)
-    icelz = int(pos(i,3)/rnz)
+  do i = 1, Nq
+    j = charge(i)
+    icelx = int(pos(j,1)/clx)
+    icely = int(pos(j,2)/cly)
+    icelz = int(pos(j,3)/clz)
     cell_list_r(i) = hoc(icelx,icely,icelz)
     hoc(icelx,icely,icelz) = i
   end do
 
-  do i = 1, nx
-    do j = 1, ny
-      do k = 1, nz
-        l = hoc_r(i,j,k)
-        m = 0
-        do while( l /= 0 )
-          m = m + 1
-          inv_cell_list_r(k) = l
-          inv_hoc_r(icelx,icely,icelz) = k
-          l = cell_list_r(l)
-        end do
-      end do
-    end do
+  do i = Nq, 1, -1
+    j = charge(i)
+    icelx = int(pos(j,1)/clx)
+    icely = int(pos(j,2)/cly)
+    icelz = int(pos(j,3)/clz)
+    inv_cell_list_r(i) = inv_hoc_r(icelx,icely,icelz)
+    inv_hoc_r(icelx,icely,icelz) = i
   end do
 
 !   open(100,file='cell_list_q.txt')
@@ -365,6 +372,123 @@ subroutine Delta_Energy(DeltaE)
   DeltaE = -1
 
 end subroutine Delta_Energy
+
+
+subroutine update_real_cell_list
+  use global_variables
+  implicit none
+
+  call update_real_cell_list_delete
+  call update_real_cell_list_add
+
+end subroutine update_real_cell_list
+
+
+subroutine update_real_cell_list_add
+  use global_variables
+  implicit none
+  integer :: icelx, icely, icelz
+  integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
+  integer :: ed, st 
+
+  icelx = int(pos_ip1(1)/clx)
+  icely = int(pos_ip1(2)/cly)
+  icelz = int(pos_ip1(3)/clz)  
+
+  ii = inv_charge(ip)   !ii belongs to [1,Nq]
+
+  cell_list_r(ii) = hoc_r(icelx,icely,icelz)
+  hoc_r(icelx,icely,icelz) = ii
+
+  inv_cell_list_r(ii) = 0
+  if ( inv_hoc_r(icelx,icely,icelz) /=0 ) then
+    inv_cell_list_r( hoc_r(icelx,icely,icelz) ) = ii
+  else
+    inv_hoc_r(icelx,icely,icelz) = ii
+  end if
+
+end subroutine update_real_cell_list_add
+
+
+subroutine update_real_cell_list_delete
+  use global_variables
+  implicit none
+  integer :: icelx, icely, icelz
+  integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
+  integer :: ed, st 
+
+  icelx = int(pos_ip0(1)/clx)
+  icely = int(pos_ip0(2)/cly)
+  icelz = int(pos_ip0(3)/clz) 
+
+  ii = inv_charge(ip)   !ii belongs to [1,Nq]
+
+  nti = cell_list_r(ii)
+  bfi = inv_cell_list_r(ii)
+
+  if ( bfi/=0 .and. nti/=0 ) then        !middle
+    cell_list_r(nti) = bfi
+    inv_cell_list_r(bfi) = nti
+  elseif ( bfi==0 .and. nti/=0 ) then    !the first one
+    cell_list_r(nti) = bfi
+    inv_hoc_r(icelx,icely,icelz) = nti
+  elseif ( bfi/=0 .and. nti==0 ) then
+    hoc_r(icelx,icely,icelz) = bfi
+    inv_cell_list_q(bfi) = nti
+  else
+    hoc_r(icelx,icely,icelz) = bfi
+    inv_hoc_r(icelx,icely,icelz) = nti
+  end if
+
+end subroutine update_real_cell_list_delete
+
+
+subroutine update_charge_cell_list_add
+  use global_variables
+  implicit none
+  integer :: ii       
+
+  ii = inv_charge(ip)         ! ii belongs to [1,Nq]
+
+  cell_list_q(ii) = cell_list_q(Nq+1)
+  cell_list_q(Nq+1) = ii
+
+  inv_cell_list_q(ii) = 0
+  if ( cell_list_q(Nq+1)/=0 ) then
+    inv_cell_list_q(cell_list_q(Nq+1)) = ii
+  else
+    inv_cell_list_q(Nq+1) = ii
+  end if
+
+end subroutine update_charge_cell_list_add
+
+
+subroutine update_charge_cell_list_delete
+  use global_variables
+  implicit none
+  integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
+
+  ii = inv_charge(ip)         !ii belongs to [1,Nq]
+  
+  bfi = cell_list_q(ii)
+  nti = inv_cell_list_q(ii)
+
+  if ( bfi/=0 .and. nti/=0 ) then        !middle
+    cell_list_q(nti) = bfi
+    inv_cell_list_q(bfi) = nti
+  elseif ( bfi==0 .and. nti/=0 ) then    !the first one
+    cell_list_q(nti) = bfi
+    inv_cell_list_q(Nq+1) = nti
+  elseif ( bfi/=0 .and. nti==0 ) then
+    cell_list_q(Nq+1) = bfi
+    inv_cell_list_q(bfi) = nti
+  else
+    cell_list_q(Nq+1) = bfi
+    inv_cell_list_q(Nq+1) = nti
+  end if
+
+end subroutine update_charge_cell_list_delete
+
 
 
 end module compute_energy

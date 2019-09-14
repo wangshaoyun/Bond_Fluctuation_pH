@@ -72,7 +72,8 @@ subroutine read_data
     read(10,*) Nga
     read(10,*) man_s
     read(10,*) StepNum0           
-    read(10,*) StepNum            
+    read(10,*) StepNum    
+    read(10,*) DeltaStep        
     read(10,*) DeltaStep1
     read(10,*) DeltaStep2     
     read(10,*) DeltaStep3 

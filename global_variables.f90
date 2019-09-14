@@ -32,12 +32,14 @@ save
   real*8  :: Beta     !Beta=1/(kB*T), T is temperature, 
                       !kB is Boltzmann constant
   real*8  :: pH_pKa   !pH - pKa
+  real*8  :: accept
 !##########################################################!
 
 !##################running and Histogram###################!
   integer :: restart_or_continue  !restart or continue after breaking off
   integer :: StepNum0             !Steps of preheating
   integer :: StepNum              !Steps of running
+  integer :: Deltastep            !Each deltastep of pH move
   integer :: DeltaStep1           !step inteval, height
   integer :: DeltaStep2           !step inteval, histogram
   integer :: DeltaStep3           !step inteval, write data
@@ -56,7 +58,10 @@ save
   integer, allocatable, dimension(:,:) :: pos    !array of position
   integer, dimension(4) :: pos_ip0                !old position of ip
   integer, dimension(4) :: pos_ip1                !new position of ip
+  integer, dimension(4) :: pos_ip0i               !old position of ip
+  integer, dimension(4) :: pos_ip1i               !new position of ip
   integer :: ip                                  !The particle that is choosed
+  integer :: ip1
   integer, dimension(6,3) :: new_direction
   integer, allocatable, dimension(:,:) :: monbd         !bonds of the monomers
   integer, allocatable, dimension(:)   :: bond_numb     !bond number, always 
