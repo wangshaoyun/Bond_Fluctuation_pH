@@ -19,7 +19,7 @@ implicit none
   call initialize_parameters
   !
   !initialize energy and parameters of potential
-  call initialize_energy_parameters
+  call initialize_energy_parameter
   !
   ! restart or continue
   if (restart_or_continue == 0) then

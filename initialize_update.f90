@@ -316,14 +316,16 @@ subroutine choose_particle_pH
 end subroutine choose_particle_pH
 
 
-subroutine add_particle
+subroutine add_particle(EE,DeltaE)
   use global_variables
   use compute_energy
   implicit none
-  real*8 :: rnd(3), U_prot
+  real*8, intent(inout) :: EE
+  real*8, intent(out) :: DeltaE
+  real*8 :: rnd(3), U_prot, rnd1
   integer :: xi,yi,zi,xp,yp,zp,total
 
-  U_prot = log(10)/beta*pH_pKa !+: add, -:delete
+  U_prot = log(10.D0)/beta*pH_pKa !+: add, -:delete
 
   pos_ip0 = pos(ip,:)
   pos_ip0i = pos(ip1,:)
@@ -362,9 +364,10 @@ subroutine add_particle
       pos(ip1,:) = pos_ip1i
       call update_real_cell_list_add
       call update_charge_cell_list_add
+      EE = EE + DeltaE
     else
-      call random_number(rnd)
-      if (rnd<exp(-(DeltaE+U_prot)*beta)) then
+      call random_number(rnd1)
+      if (rnd1<(exp(-(DeltaE+U_prot)*beta))) then
         latt(xi,yi,zi) = 1
         latt(xi,yi,zp) = 1
         latt(xi,yp,zi) = 1
@@ -376,7 +379,8 @@ subroutine add_particle
         pos(ip,:) = pos_ip1
         pos(ip1,:) = pos_ip1i
         call update_real_cell_list_add    
-        call update_charge_cell_list_add 
+        call update_charge_cell_list_add
+        EE = EE + DeltaE 
       end if 
     end if
   end if
@@ -384,14 +388,16 @@ subroutine add_particle
 end subroutine add_particle
 
 
-subroutine delete_particle
+subroutine delete_particle(EE, DeltaE)
   use global_variables
   use compute_energy
   implicit none
-  real*8 :: U_prot
+  real*8, intent(inout) :: EE
+  real*8, intent(out) :: DeltaE
+  real*8 :: U_prot, rnd
   integer :: xi, yi, zi, xp, yp, zp
 
-  U_prot = log(10)/beta*pH_pKa !+: add, -:delete
+  U_prot = log(10.D0)/beta*pH_pKa !+: add, -:delete
 
   pos_ip0 = pos(ip,:)
   pos_ip1 = pos_ip0
@@ -419,6 +425,7 @@ subroutine delete_particle
     pos(ip1,:) = pos_ip1i
     call update_real_cell_list_delete
     call update_charge_cell_list_delete
+    EE = EE + DeltaE
   else
     call random_number(rnd)
     if (rnd<(exp(-(DeltaE-U_prot)*beta))) then
@@ -434,6 +441,7 @@ subroutine delete_particle
       pos(ip1,:) = pos_ip1i
       call update_real_cell_list_delete
       call update_charge_cell_list_delete
+      EE = EE + DeltaE
     end if
   end if
 

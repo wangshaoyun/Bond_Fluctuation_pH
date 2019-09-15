@@ -52,10 +52,10 @@ save
   integer, allocatable, dimension( : ), private :: inv_cell_list_r
   !
   ! head of chains, cell list
-  integer, allocatable, dimension( : ), private :: hoc_r     
+  integer, allocatable, dimension(:,:,:), private :: hoc_r     
   !
   ! head of chains, inverse cell list
-  integer, allocatable, dimension( : ), private :: inv_hoc_r
+  integer, allocatable, dimension(:,:,:), private :: inv_hoc_r
   !
   ! Periodic condition
   integer, allocatable, dimension( : ), private :: periodic_x
@@ -121,7 +121,7 @@ subroutine read_force_parameters
     read(10,*) lb
     read(10,*) EF           
     read(10,*) tol
-    read(100,*) tau_rf
+    read(10,*) tau_rf
   close(10)
 
 end subroutine read_force_parameters
@@ -198,9 +198,9 @@ subroutine energy_lookup_table(EE, rt, ft)
   call cpu_time(st)
   do i = 1, Nq
     m = charge(i)
-    icelx = int(pos(m,1)/clx)
-    icely = int(pos(m,2)/cly)
-    icelz = int(pos(m,3)/clz) 
+    icelx = int(pos(m,1)/clx)+1
+    icely = int(pos(m,2)/cly)+1
+    icelz = int(pos(m,3)/clz)+1
     ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
     do j = 1, cell_near_list(ncel,28,1)
       icelx = cell_near_list(ncel,j,1)
@@ -210,7 +210,9 @@ subroutine energy_lookup_table(EE, rt, ft)
       do while(k/=0)
         l = charge(k)
         if (l/=i) then
-          (/x,y,z/) = pos(i,1:3) - pos(l,1:3)
+          x = pos(i,1) - pos(l,1)
+          y = pos(i,2) - pos(l,2)
+          z = pos(i,3) - pos(l,3)
           x = periodic_x(x)
           y = periodic_y(y)
           if ((x*x+y*y+z*z)<rcc2) then
@@ -231,7 +233,9 @@ subroutine energy_lookup_table(EE, rt, ft)
       m = charge(i)
       n = charge(j)
       if (m/=n) then
-        (/x,y,z/) = pos(m,1:3) - pos(n,1:3)
+        x = pos(m,1) - pos(n,1)
+        y = pos(m,2) - pos(n,2)
+        z = pos(m,3) - pos(n,3)        
         x = periodic_x(x)
         y = periodic_y(y)
         EE = EE + pos(m,4)*pos(n,4)*fourier_ij(x,y,z)
@@ -305,7 +309,7 @@ subroutine pre_calculate_fourier_space
         kz = 2*pi*(k-K3_half-1)/Lz2
         k2 = kx*kx + ky*ky + kz*kz
         if (k2 == 0) then
-          exp_k2(i,j,k) == 0
+          exp_k2(i,j,k) = 0
         else
           exp_k2(i,j,k) = cmplx(exp(-1.D0*k2/4/alpha)/k2,0)
         end if
@@ -323,7 +327,7 @@ subroutine pre_calculate_fourier_space
 
   if (allocated(fourier_ij)) deallocate( fourier_ij )
 
-  allocate( fourier_ij( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) )
+  allocate( fourier_ij( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) ) )
 
   do i = 1, Kmax1
     do j = 1, Kmax2 
@@ -351,27 +355,27 @@ end subroutine pre_calculate_fourier_space
 subroutine pre_calculate_real_space
   use global_variables
   implicit none
-  integer :: i, j, k
-  integer :: nn, nn_half
+  integer :: i, j, k 
+  integer :: nnl, nn_half
   real*8 :: rr, x, y, z
 
-  nn = floor(rcc)   ! lattice length
-  if ( mod(nn,2) == 0 ) then
-    nn_half = nn / 2
+  nnl = floor(rcc)   ! lattice length
+  if ( mod(nnl,2) == 0 ) then
+    nn_half = nnl / 2
   else
     nn_half = (nn-1) / 2
   end if 
   if (allocated(real_ij)) deallocate(real_ij)
-  allocate( real_ij( -nn_half:nn-nn_half-1, -nn_half:nn-nn_half-1, -nn_half:nn-nn_half-1 ) )
+  allocate( real_ij( -nn_half:nnl-nn_half-1, -nn_half:nnl-nn_half-1, -nn_half:nnl-nn_half-1 ) )
 
-  do i = -nn_half, nn-nn_half-1
-    do j = -nn_half, nn-nn_half-1
-      do k = -nn_half, nn-nn_half-1
-        x = p/2.D0                      !sigma unit
-        y = q/2.D0
-        z = q/2.D0
+  do i = -nn_half, nnl-nn_half-1
+    do j = -nn_half, nnl-nn_half-1
+      do k = -nn_half, nnl-nn_half-1
+        x = i/2.D0                      !sigma unit
+        y = j/2.D0
+        z = k/2.D0
         rr = sqrt(x*x+y*y+z*z)
-        real_ij(p,q,r) = erfc(alpha*rr)/rr
+        real_ij(i,j,k) = erfc(alpha*rr)/rr
       end do
     end do
   end do
@@ -430,7 +434,7 @@ subroutine Initialize_cell_list_q
 
   inv_cell_list_q(Nq+1) = 0
   do i = Nq, 1, -1
-    inv_cell_list_q(i) = inv_cell_list_q(N+1)
+    inv_cell_list_q(i) = inv_cell_list_q(Nq+1)
     inv_cell_list_q(Nq+1) = i
   end do
 
@@ -471,8 +475,8 @@ subroutine Initialize_real_cell_list
     icelx = int(pos(j,1)/clx) + 1
     icely = int(pos(j,2)/cly) + 1
     icelz = int(pos(j,3)/clz) + 1
-    cell_list_r(i) = hoc(icelx,icely,icelz)
-    hoc(icelx,icely,icelz) = i
+    cell_list_r(i) = hoc_r(icelx,icely,icelz)
+    hoc_r(icelx,icely,icelz) = i
   end do
 
   do i = Nq, 1, -1
@@ -486,7 +490,7 @@ subroutine Initialize_real_cell_list
 
   !
   ! maxium situation, (125*125*100,28,3), 500Mb RAM is needed.
-  allocate(cell_near_list(nclx*ncly*nclz,28,3)))
+  allocate(cell_near_list(nclx*ncly*nclz,28,3))
   cell_near_list = 0
   m = 0
   do i = 1, nclx
@@ -547,7 +551,7 @@ subroutine Delta_Energy(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
-  integer :: i,j,k,x,y,z,icelx,icey,icelz,ncel
+  integer :: i,j,k,x,y,z,icelx,icely,icelz,ncel
   real*8 :: EE1,EE2,rr,dMz
   real*8, dimension(3) :: rij
 
@@ -561,12 +565,16 @@ subroutine Delta_Energy(DeltaE)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-      (/x,y,z/) = pos_ip0(1:3) - pos(k,1:3)
+      x = pos_ip0(1) - pos(k,1)
+      y = pos_ip0(2) - pos(k,2)
+      z = pos_ip0(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
       EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
 
-      (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+      x = pos_ip1(1) - pos(k,1)
+      y = pos_ip1(2) - pos(k,2)
+      z = pos_ip1(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
       EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
@@ -578,9 +586,9 @@ subroutine Delta_Energy(DeltaE)
   !
   ! Real Space
   EE1 = 0
-  icelx = int(pos_ip0(1)/clx)
-  icely = int(pos_ip0(2)/cly)
-  icelz = int(pos_ip0(3)/clz) 
+  icelx = int(pos_ip0(1)/clx)+1
+  icely = int(pos_ip0(2)/cly)+1
+  icelz = int(pos_ip0(3)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -590,7 +598,9 @@ subroutine Delta_Energy(DeltaE)
     do while (j/=0) 
       k = charge(j)
       if (k/=ip) then
-        (/x,y,z/) = pos_ip0(1:3) - pos(k,1:3)
+        x = pos_ip0(1) - pos(k,1)
+        y = pos_ip0(2) - pos(k,2)
+        z = pos_ip0(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
         if ((x*x+y*y+z*z)<rcc) then
@@ -602,9 +612,9 @@ subroutine Delta_Energy(DeltaE)
   EE1 = EE1 * pos_ip1(4)
 
   EE2 = 0
-  icelx = int(pos_ip1(1)/clx)
-  icely = int(pos_ip1(2)/cly)
-  icelz = int(pos_ip1(3)/clz) 
+  icelx = int(pos_ip1(1)/clx)+1
+  icely = int(pos_ip1(2)/cly)+1
+  icelz = int(pos_ip1(3)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -614,7 +624,9 @@ subroutine Delta_Energy(DeltaE)
     do while (j/=0) 
       k = charge(j)
       if (k/=ip) then
-        (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+        x = pos_ip1(1) - pos(k,1)
+        y = pos_ip1(2) - pos(k,2)
+        z = pos_ip1(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
         if ((x*x+y*y+z*z)<rcc) then
@@ -635,7 +647,7 @@ subroutine Delta_Energy(DeltaE)
   Mz = Mz + dMz
   !
   ! External field energy
-  DeltaE = DeltaE - EF*pos_ip0(4)*(pos_ip1(3) - pos_ip0(3))/2.DO  !simga unit
+  DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
 
 end subroutine Delta_Energy
 
@@ -644,7 +656,7 @@ subroutine Delta_Energy_add(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
-  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icey,icelz,ncel
+  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icely,icelz,ncel
   real*8 :: EE1,EE2,rr,dMz
   real*8, dimension(3) :: rij
 
@@ -659,12 +671,16 @@ subroutine Delta_Energy_add(DeltaE)
   j = cell_list_q(Nq+1)
   do while (j/=0)
     k = charge(j)
-    (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+    x = pos_ip1(1) - pos(k,1)
+    y = pos_ip1(2) - pos(k,2)
+    z = pos_ip1(3) - pos(k,3)
     x = Periodic_x(x)
     y = Periodic_y(y)
     EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
 
-    (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+    x = pos_ip1i(1) - pos(k,1)
+    y = pos_ip1i(2) - pos(k,2)
+    z = pos_ip1i(3) - pos(k,3)
     x = Periodic_x(x)
     y = Periodic_y(y)
     EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
@@ -675,9 +691,9 @@ subroutine Delta_Energy_add(DeltaE)
   !
   ! Real Space
   EE1 = 0
-  icelx = int(pos_ip1(1)/clx)
-  icely = int(pos_ip1(2)/cly)
-  icelz = int(pos_ip1(3)/clz) 
+  icelx = int(pos_ip1(1)/clx)+1
+  icely = int(pos_ip1(2)/cly)+1
+  icelz = int(pos_ip1(3)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -686,7 +702,9 @@ subroutine Delta_Energy_add(DeltaE)
     j = hoc_r(icelx,icely,icelz) 
     do while (j/=0) 
       k = charge(j)
-      (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+      x = pos_ip1(1) - pos(k,1)
+      y = pos_ip1(2) - pos(k,2)
+      z = pos_ip1(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
       if ((x*x+y*y+z*z)<rcc2) then
@@ -697,9 +715,9 @@ subroutine Delta_Energy_add(DeltaE)
   EE1 = EE1 * qq1
 
   EE2 = 0
-  icelx = int(pos_ip1i(1)/clx)
-  icely = int(pos_ip1i(2)/cly)
-  icelz = int(pos_ip1i(3)/clz) 
+  icelx = int(pos_ip1i(1)/clx)+1
+  icely = int(pos_ip1i(2)/cly)+1
+  icelz = int(pos_ip1i(3)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -708,7 +726,9 @@ subroutine Delta_Energy_add(DeltaE)
     j = hoc_r(icelx,icely,icelz) 
     do while (j/=0) 
       k = charge(j)
-      (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+      x = pos_ip1i(1) - pos(k,1)
+      y = pos_ip1i(2) - pos(k,2)
+      z = pos_ip1i(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
       if ((x*x+y*y+z*z)<rcc) then
@@ -721,7 +741,9 @@ subroutine Delta_Energy_add(DeltaE)
 
   !
   !interaction of the added two particles
-  (/x,y,z/) = pos_ip1i(1:3) - pos_ip1(1:3)
+  x = pos_ip1i(1) - pos_ip1(1)
+  y = pos_ip1i(2) - pos_ip1(2)
+  z = pos_ip1i(3) - pos_ip1(3)
   x = Periodic_x(x)
   y = Periodic_y(y)
   DeltaE = DeltaE + qq1*qq2*(fourier_ij(x,y,z)+real_ij(x,y,z))
@@ -742,8 +764,8 @@ subroutine Delta_Energy_delete(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
-  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icey,icelz,ncel
-  real*8 :: EE1,EE2,rr
+  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icely,icelz,ncel
+  real*8 :: EE1,EE2,rr,dMz
   real*8, dimension(3) :: rij
 
   DeltaE = 0
@@ -758,13 +780,17 @@ subroutine Delta_Energy_delete(DeltaE)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-      (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+      x = pos_ip1(1) - pos(k,1)
+      y = pos_ip1(2) - pos(k,2)
+      z = pos_ip1(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
       EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
     end if
     if (k/=ip1) then
-      (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+      x = pos_ip1i(1) - pos(k,1)
+      y = pos_ip1i(2) - pos(k,2)
+      z = pos_ip1i(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
       EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
@@ -776,9 +802,9 @@ subroutine Delta_Energy_delete(DeltaE)
   !
   ! Real Space
   EE1 = 0
-  icelx = int(pos_ip1(1)/clx)
-  icely = int(pos_ip1(2)/cly)
-  icelz = int(pos_ip1(3)/clz) 
+  icelx = int(pos_ip1(1)/clx)+1
+  icely = int(pos_ip1(2)/cly)+1
+  icelz = int(pos_ip1(3)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -788,7 +814,9 @@ subroutine Delta_Energy_delete(DeltaE)
     do while (j/=0) 
       k = charge(j)
       if (k/=ip) then
-        (/x,y,z/) = pos_ip1(1:3) - pos(k,1:3)
+        x = pos_ip1(1) - pos(k,1)
+        y = pos_ip1(2) - pos(k,2)
+        z = pos_ip1(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
         if ((x*x+y*y+z*z)<rcc2) then
@@ -800,9 +828,9 @@ subroutine Delta_Energy_delete(DeltaE)
   EE1 = EE1 * qq1
 
   EE2 = 0
-  icelx = int(pos_ip1i(1)/clx)
-  icely = int(pos_ip1i(2)/cly)
-  icelz = int(pos_ip1i(3)/clz) 
+  icelx = int(pos_ip1i(1)/clx)+1
+  icely = int(pos_ip1i(2)/cly)+1
+  icelz = int(pos_ip1i(3)/clz)+1 
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -812,7 +840,9 @@ subroutine Delta_Energy_delete(DeltaE)
     do while (j/=0) 
       k = charge(j)
       if (k/=ip1) then
-        (/x,y,z/) = pos_ip1i(1:3) - pos(k,1:3)
+        x = pos_ip1i(1) - pos(k,1)
+        y = pos_ip1i(2) - pos(k,2)
+        z = pos_ip1i(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
         if ((x*x+y*y+z*z)<rcc2) then
@@ -825,7 +855,9 @@ subroutine Delta_Energy_delete(DeltaE)
   DeltaE = DeltaE + EE1 + EE2
   !
   !interaction of the added two particles
-  (/x,y,z/) = pos_ip1i(1:3) - pos_ip1(1:3)
+  x = pos_ip1i(1) - pos_ip1(1)
+  y = pos_ip1i(2) - pos_ip1(2)
+  z = pos_ip1i(3) - pos_ip1(3)
   x = Periodic_x(x)
   y = Periodic_y(y)
   DeltaE = DeltaE - qq1*qq2*(fourier_ij(x,y,z)+real_ij(x,y,z))
@@ -859,9 +891,9 @@ subroutine update_real_cell_list_add
   integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
   integer :: ed, st 
 
-  icelx = int(pos_ip1(1)/clx)
-  icely = int(pos_ip1(2)/cly)
-  icelz = int(pos_ip1(3)/clz)  
+  icelx = int(pos_ip1(1)/clx)+1
+  icely = int(pos_ip1(2)/cly)+1
+  icelz = int(pos_ip1(3)/clz)+1
 
   ii = inv_charge(ip)   !ii belongs to [1,Nq]
 
@@ -885,9 +917,9 @@ subroutine update_real_cell_list_delete
   integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
   integer :: ed, st 
 
-  icelx = int(pos_ip0(1)/clx)
-  icely = int(pos_ip0(2)/cly)
-  icelz = int(pos_ip0(3)/clz) 
+  icelx = int(pos_ip0(1)/clx)+1
+  icely = int(pos_ip0(2)/cly)+1
+  icelz = int(pos_ip0(3)/clz)+1
 
   ii = inv_charge(ip)   !ii belongs to [1,Nq]
 

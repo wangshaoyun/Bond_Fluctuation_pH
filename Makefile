@@ -3,7 +3,7 @@ main: compute_energy.o global_variables.o main.o \
 	input_output.o initialize_update.o
 	
 	gfortran -g -Wall -o main compute_energy.o global_variables.o \
-	main.o input_output.o initialize_update.o
+	main.o input_output.o initialize_update.o -lfftw3
 
 # .PHONY: main.o
 main.o: initialize_update.mod global_variables.mod \
