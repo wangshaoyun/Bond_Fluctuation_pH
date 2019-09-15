@@ -17,29 +17,35 @@ implicit none
   !
   !input and initialize system, timing and histogram parameters.
   call initialize_parameters
-!   !
-!   !initialize energy and parameters of potential
-!   call initialize_energy_parameters
   !
+  !initialize energy and parameters of potential
+  call initialize_energy_parameters
   !
-!   if (restart_or_continue == 0) then
+  ! restart or continue
+  if (restart_or_continue == 0) then
     i=1
     !
     !initialize position  
     call initialize_position
+    !
+    !initialize energy array related to pos array
+    call initialize_energy_arrays
     call write_pos
     call write_pos1(i)
     !
     !error analysis
-    call error_analysis
+    call error_analysis(0,EE)
     call write_hist    
   else if (restart_or_continue /= 0) then
     !
     !read position and histogram data
     call continue_read_data(i)
     !
+    !initialize energy array related to pos array
+    call initialize_energy_arrays
+    !
     !error analysis
-    call error_analysis
+    call error_analysis(0,EE)
   end if
   !##############preheating##############!
   if ( i <= StepNum0 ) then
@@ -50,7 +56,8 @@ implicit none
         call write_physical_quantities( step )
       end if
       if ( mod(step,DeltaStep3) == 0 ) then
-        call error_analysis
+        call error_analysis(1, EE1)
+        call write_energy(step,EE,EE1)
         call write_pos1(step)
       end if
     end do
@@ -74,10 +81,17 @@ implicit none
   end do
 
   !##################end#################!
-  call cpu_time(finished)
-  total_time=finished-started+total_time
-  call write_time(total_time)
-  write(*,*) 'Finished!'
+  write(*,*)
+  write(*,*)
+  write(*,*) '************************************************************'
+  write(*,*) '*************************Finished***************************'
+  write(*,*) 'Finished!     '
+  write(*,*) 'time:(minutes)', real(total_time/60), 'minutes'
+  write(*,*) 'time:(hours)  ', real(total_time/3600), 'hours'
+  write(*,*) 'time:(days)   ', real(total_time/86400), 'days'
+  write(*,*) '************************************************************'
+  write(*,*)
+  write(*,*)
 
 end program main
 

@@ -1,10 +1,6 @@
 module compute_energy_ewald
   !--------------------------------------!
-  !Input:
-  ! pos, pos_ip0, pos_ip1, ip
-  ! and the system parameters
-  !Output: 
-  ! EE, DeltaE 
+  ! 
   !--------------------------------------!
   implicit none
 
@@ -89,6 +85,8 @@ module compute_energy_ewald
   integer, allocatable, dimension( : ), private :: fene_list
                                   !list of chemical bonds
   integer, allocatable, dimension( : ), private :: fene_point
+                                  !same as lj_point and real_point
+  real*8,  allocatable, dimension(:,:), private :: posq
                                   !same as lj_point and real_point
 !########################end arrays########################!
 
@@ -248,12 +246,12 @@ subroutine LJ_energy (EE)
   end do
 
   do i = 1, NN
-    if ( pos(i,3) > 0 .and. pos(i,3) < 0.86 ) then
-      rr = pos(i,3)
+    if ( posq(i,3) > 0 .and. posq(i,3) < 0.86 ) then
+      rr = posq(i,3)
       EE = EE + epsilon * ( 2.D0/15 * ( sigma / rr )**9 &
                             - ( sigma / rr )**3 )
-    elseif ( pos(i,3) <Lz .and. pos(i,3) > (Lz - 0.86) ) then
-      rr = Lz-pos(i,3)
+    elseif ( posq(i,3) <Lz .and. posq(i,3) > (Lz - 0.86) ) then
+      rr = Lz-posq(i,3)
       EE = EE + epsilon * ( 2.D0/15 * ( sigma / rr )**9 &
                             - ( sigma / rr )**3 )
     endif
@@ -347,14 +345,14 @@ subroutine Coulomb_energy ( EE )
           rr = sqrt( rr2 )
           !
           !Real space energy
-          Ec = Ec + pos(i,4) * pos(j,4) * erfc(alpha*rr) / rr / 2 
+          Ec = Ec + posq(i,4) * posq(j,4) * erfc(alpha*rr) / rr / 2 
         end if
       end do
       !z component of dipole moment
-      Mz = Mz + pos(i,4)*pos(i,3)
+      Mz = Mz + posq(i,4)*posq(i,3)
       !
       !Self energy
-      Ec = Ec - sqrt(alpha2/pi) * pos(i,4) * pos(i,4)
+      Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
     end do
   else
     do m = 1, Nq-1
@@ -366,20 +364,20 @@ subroutine Coulomb_energy ( EE )
           rr = sqrt( rr2 )
           !
           !Real space energy
-          Ec = Ec + pos(i,4) * pos(j,4) * erfc(alpha*rr) / rr
+          Ec = Ec + posq(i,4) * posq(j,4) * erfc(alpha*rr) / rr
         end if
       end do
       !z component of dipole moment
-      Mz = Mz + pos(i,4)*pos(i,3)
+      Mz = Mz + posq(i,4)*posq(i,3)
       !
       !Self energy
-      Ec = Ec - sqrt(alpha2/pi) * pos(i,4) * pos(i,4)
+      Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
     end do
     i  = charge(Nq)
-    Mz = Mz + pos(i,4)*pos(i,3)
+    Mz = Mz + posq(i,4)*posq(i,3)
     !
     !Self energy
-    Ec = Ec - sqrt(alpha2/pi) * pos(i,4) * pos(i,4)
+    Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
   end if 
   !
   !Reciprocal space energy
@@ -416,7 +414,7 @@ subroutine Electrical_energy(EE)
     !EF is positive from bottom to top
     !The potential at the bottom plate is zero.
     i = charge(j)
-    EE = EE - EF * pos(i,3) * pos(i,4) 
+    EE = EE - EF * posq(i,3) * posq(i,4) 
 
   end do
 
@@ -602,7 +600,7 @@ subroutine Delta_lj_Energy(DeltaE)
     !
     !Energy of old configuration
     !
-    rij = pos(i, 1:3) - pos_ip0(1:3)
+    rij = posq(i, 1:3) - pos_ip0(1:3)
     !
     !periodic condition
     if ( rij(1) > h_lx ) then
@@ -627,7 +625,7 @@ subroutine Delta_lj_Energy(DeltaE)
     !
     !Energy of new configuration
     !
-    rij = pos(i, 1:3) - pos_ip1(1:3)
+    rij = posq(i, 1:3) - pos_ip1(1:3)
     !
     !periodic condition
     if ( rij(1) > h_lx ) then
@@ -724,7 +722,7 @@ subroutine Delta_FENE_Energy(DeltaE)
     !
     !Energy of FENE potential of odd configuration
     !
-    rij = pos(i,1:3) - pos_ip0(1:3)
+    rij = posq(i,1:3) - pos_ip0(1:3)
     !
     !Peridoic condition
     if ( rij(1) > Lx/2 ) then
@@ -742,7 +740,7 @@ subroutine Delta_FENE_Energy(DeltaE)
     !
     !Energy of FENE potential of new configuration
     !
-    rij = pos(i,1:3) - pos_ip1(1:3)
+    rij = posq(i,1:3) - pos_ip1(1:3)
     !
     !Periodic condition
     if ( rij(1) > Lx/2 ) then
@@ -812,7 +810,7 @@ subroutine Delta_real_Energy(DeltaE)
       !
       !Energy of Coulomb potential of old configuration in real space
       !
-      rij = pos(i,1:3) - pos_ip0(1:3)
+      rij = posq(i,1:3) - pos_ip0(1:3)
       !
       !Periodic condition
       if ( rij(1) > h_lx ) then
@@ -828,12 +826,12 @@ subroutine Delta_real_Energy(DeltaE)
       rr = rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3)
       if ( rr < rc_real2 ) then
         rr = sqrt(rr)
-        EE = EE - pos(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
+        EE = EE - posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
       end if
       !
       !Energy of Coulomb potential of new configuration in real space
       !
-      rij = pos(i,1:3) - pos_ip1(1:3)
+      rij = posq(i,1:3) - pos_ip1(1:3)
       !
       !Periodic condition
       if ( rij(1) > h_lx ) then
@@ -849,7 +847,7 @@ subroutine Delta_real_Energy(DeltaE)
       rr = rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3)
       if ( rr < rc_real2 ) then
         rr = sqrt(rr)
-        EE = EE + pos(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
+        EE = EE + posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
       end if
     end do
   else 
@@ -859,7 +857,7 @@ subroutine Delta_real_Energy(DeltaE)
       !
       !Energy of Coulomb potential of old configuration in real space
       !
-      rij = pos(i,1:3) - pos_ip0(1:3)
+      rij = posq(i,1:3) - pos_ip0(1:3)
       !
       !Periodic condition
       if ( rij(1) > h_lx ) then
@@ -873,11 +871,11 @@ subroutine Delta_real_Energy(DeltaE)
         rij(2) = rij(2) + Ly
       end if
       rr = sqrt( rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3) )
-      EE = EE - pos(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
+      EE = EE - posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
       !
       !Energy of Coulomb potential of new configuration in real space
       !
-      rij = pos(i,1:3) - pos_ip1(1:3)
+      rij = posq(i,1:3) - pos_ip1(1:3)
       !
       !Periodic condition
       if ( rij(1) > h_lx ) then
@@ -891,7 +889,7 @@ subroutine Delta_real_Energy(DeltaE)
         rij(2) = rij(2) + Ly
       end if
       rr = sqrt( rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3) )
-      EE = EE + pos(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
+      EE = EE + posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
     end do
   end if
 
@@ -1018,29 +1016,38 @@ subroutine error_analysis_ewald(EE1)
   real*8, intent(out) :: EE1
   integer i,j,m
 
-  !
-  !Initialize ewald parameters and array allocate.
-  call Initialize_ewald_parameters
+  tol = 5                
 
-  EE0 = 0
-  EE1 = 0
-  EE2 = 0
-
-  tol = 5                   
-
-  call Initialize_ewald_parameters
-
-  if ( real_verlet == 1 ) then
-    call build_real_verlet_list
-  end if
-
-  call build_totk_vectk
-
-  call build_exp_ksqr
-
-  call build_rho_k
-
-  call write_energy_parameters
+  do i = 1, NN
+    if (mod(Lx2,2)==0) then
+      if (pos(i,1)>=Lx2/2) then
+        posq(i,1) = ( pos(i,1) - Lx2 ) / 2.D0
+      elseif(pos(i,1)<-Lx2/2) then
+        posq(i,1) = ( pos(i,1) + Lx2 ) / 2.D0
+      end if
+    else
+      if (pos(i,2)>=Ly2/2) then
+        posq(i,2) = ( pos(i,2) - Ly2 ) / 2.D0
+      elseif(pos(i,2)<-Ly2/2) then
+        posq(i,2) = ( pos(i,2) + Ly2 ) / 2.D0
+      end if
+    end if
+    if (mod(Ly2,2)==0) then
+      if (pos(i,2)>=Ly2/2) then
+        posq(i,2) = ( pos(i,2) - Ly2 ) / 2.D0
+      elseif(pos(i,2)<-Ly2/2) then
+        posq(i,2) = ( pos(i,2) + Ly2 ) / 2.D0
+      end if
+    else
+      if (pos(i,2)>Ly2/2) then
+        posq(i,2) = ( pos(i,2) - Ly2 ) / 2.D0
+      elseif(pos(i,2)<-Ly2/2) then
+        posq(i,2) = ( pos(i,2) + Ly2 ) / 2.D0
+      end if
+    end if
+    posq(i,3) = pos(i,3) / 2.D0
+    posq(i,4) = pos(i,4)
+  end do
 
   call Coulomb_energy(EE1)
 
@@ -1055,19 +1062,22 @@ subroutine read_energy_parameters
   implicit none
 
   open(unit=100, file='energy_data.txt')
-    read(100,*) epsilon
-    read(100,*) sigma
-    read(100,*) rc_lj
-    read(100,*) rv_lj
-    read(100,*) rsk_lj
-    read(100,*) rsk_real
-    read(100,*) R0_2
-    read(100,*) kFENE
     read(100,*) lb
     read(100,*) Ef
     read(100,*) tol
     read(100,*) tau_rf
   close(100)
+
+  epsilon = 1
+  sigma = 1
+  rc_lj = 1.12
+  rv_lj = 2
+  rsk_lj = 1
+  rsk_real = 1
+  R0_2 = 2.25
+  kFENE = 30
+
+  allocate(posq(NN,4))
 
 end subroutine read_energy_parameters
 
@@ -1360,7 +1370,7 @@ subroutine build_rho_k
 
   do m = 1, Nq
     n = charge(m)
-    zq(m) = pos(n,4)
+    zq(m) = posq(n,4)
   end do
 
   c1 = 2*pi/Lx
@@ -1372,9 +1382,9 @@ subroutine build_rho_k
     eiky(m,0)  = (1,0)
     eikz(m,0)  = (1,0)
 
-    eikx(m,1)  = cmplx( cos(c1*pos(i,1)), sin(c1*pos(i,1)), 8 )
-    eiky(m,1)  = cmplx( cos(c2*pos(i,2)), sin(c2*pos(i,2)), 8 )
-    eikz(m,1)  = cmplx( cos(c3*pos(i,3)), sin(c3*pos(i,3)), 8 )
+    eikx(m,1)  = cmplx( cos(c1*posq(i,1)), sin(c1*posq(i,1)), 8 )
+    eiky(m,1)  = cmplx( cos(c2*posq(i,2)), sin(c2*posq(i,2)), 8 )
+    eikz(m,1)  = cmplx( cos(c3*posq(i,3)), sin(c3*posq(i,3)), 8 )
 
     eikx(m,-1) = conjg(eikx(m,1))
     eiky(m,-1) = conjg(eiky(m,1))
@@ -1446,18 +1456,18 @@ subroutine build_lj_verlet_list
   rcel2=Ly/ncel2      !Size of each cell in y direction
   rcel3=Lz/ncel3      !Size of each cell in z direction
   do i=1,NN
-    icel=int((pos(i,1)+Lx/2)/rcel1)
-    jcel=int((pos(i,2)+Ly/2)/rcel2)
-    kcel=int(pos(i,3)/rcel3)
+    icel=int((posq(i,1)+Lx/2)/rcel1)
+    jcel=int((posq(i,2)+Ly/2)/rcel2)
+    kcel=int(posq(i,3)/rcel3)
     cell_list(i)=hoc(icel,jcel,kcel)
     hoc(icel,jcel,kcel)=i
   end do
 
   k=0
   do i=1,NN
-    icel=int((pos(i,1)+Lx/2)/rcel1)  
-    jcel=int((pos(i,2)+Ly/2)/rcel2)
-    kcel=int(pos(i,3)/rcel3)
+    icel=int((posq(i,1)+Lx/2)/rcel1)  
+    jcel=int((posq(i,2)+Ly/2)/rcel2)
+    kcel=int(posq(i,3)/rcel3)
     do l=-1,1
       if (icel+l .ge. ncel1) then
         p=icel+l-ncel1
@@ -1546,9 +1556,9 @@ subroutine build_real_verlet_list
   rcel3=Lz/ncel3
   do m=1,Nq
     i=charge(m)
-    icel=int((pos(i,1)+Lx/2)/rcel1)
-    jcel=int((pos(i,2)+Ly/2)/rcel2)
-    kcel=int(pos(i,3)/rcel3)
+    icel=int((posq(i,1)+Lx/2)/rcel1)
+    jcel=int((posq(i,2)+Ly/2)/rcel2)
+    kcel=int(posq(i,3)/rcel3)
     cell_list(m)=hoc(icel,jcel,kcel)
     hoc(icel,jcel,kcel)=m
   end do
@@ -1556,9 +1566,9 @@ subroutine build_real_verlet_list
   k=0
   do m=1,Nq
     i=charge(m)
-    icel=int((pos(i,1)+Lx/2)/rcel1)
-    jcel=int((pos(i,2)+Ly/2)/rcel2)
-    kcel=int(pos(i,3)/rcel3)
+    icel=int((posq(i,1)+Lx/2)/rcel1)
+    jcel=int((posq(i,2)+Ly/2)/rcel2)
+    kcel=int(posq(i,3)/rcel3)
     do u=-1,1
       if (icel+u>=ncel1) then
         p=icel+u-ncel1
@@ -1672,7 +1682,7 @@ subroutine rij_and_rr(rij, rsqr, i, j)
   integer, intent(in) :: i
   integer, intent(in) :: j
 
-  rij = pos(i,1:3) - pos(j,1:3)
+  rij = posq(i,1:3) - posq(j,1:3)
 
   if ( rij(1) > Lx/2 ) then
     rij(1) = rij(1) - Lx

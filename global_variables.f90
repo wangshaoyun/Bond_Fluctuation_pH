@@ -12,7 +12,7 @@ save
                       !including the chains anchored to the plate
   integer :: Nma      !Monomers of each arm
   integer :: Ns       !Monomers of each star
-  integer :: Nga      !Number of star chains grafted on plate
+  integer :: Nga      !chains grafted on plate, must square of an integer
   integer :: Nq       !Total charge in the system, ions + aions
   integer :: Nq_PE    !Charged monomers of PE
   integer :: Nq_net   !Net charged monomers of PE, or protonated monomers
@@ -31,11 +31,13 @@ save
   integer :: qqi      !Charge of salt ions
   real*8  :: ion_ratio!Ratio of salt ions to the charge quantites of PE
   real*8  :: Z_empty  !Empty space ratio of height and length in slab geometry
-  real*8  :: sigmag   !Grafting density of brushes on the plate
+  real*8  :: sigmag   !Grafting density of brushes on the plate (sigma unit)
+  real*8  :: sigmag1  !True sigma of the lattice system
   real*8  :: Beta     !Beta=1/(kB*T), T is temperature, 
                       !kB is Boltzmann constant
   real*8  :: pH_pKa   !pH - pKa
-  real*8  :: accept
+  integer :: accept   !accepted move
+  real*8  :: accept_ratio 
 !##########################################################!
 
 !##################running and Histogram###################!
@@ -61,40 +63,51 @@ save
   integer, allocatable, dimension(:,:) :: pos    !array of position
   integer, dimension(4) :: pos_ip0                !old position of ip
   integer, dimension(4) :: pos_ip1                !new position of ip
-  integer, dimension(4) :: pos_ip0i               !old position of ip
-  integer, dimension(4) :: pos_ip1i               !new position of ip
-  integer :: ip                                  !The particle that is choosed
-  integer :: ip1
+  integer, dimension(4) :: pos_ip0i               !old position of ions
+  integer, dimension(4) :: pos_ip1i               !new position of ions
+  integer :: ip                                   !The particle that is choosed
+  integer :: ip1                                  !The ions choosed
   integer, dimension(6,3) :: new_direction
-  integer, allocatable, dimension(:,:) :: monbd         !bonds of the monomers
-  integer, allocatable, dimension(:)   :: bond_numb     !bond number, always 
-                                                        !from former particle 
-                                                        !to next particle
-  integer(kind=1), allocatable, dimension(:,:,:):: latt !status of occupation 
-                                                        !of lattice
+  !
+  ! bonds connected to each monomer, the direction of first one is from before 
+  ! to itself, ohters if from itself to the next ones 
+  integer, allocatable, dimension(:,:) :: monbd  
+  !       
+  ! bonds number of each bonds
+  integer, allocatable, dimension(:)   :: bond_numb 
+  !  
+  ! status of occupation of lattice vertexes  
+  integer(kind=1), allocatable, dimension(:,:,:):: latt 
+  !                                                      
   ! i is lattice number, or the 
   ! left lattice point, i_plus is the right lattice point
   integer, allocatable, dimension(:) :: ipx   
   integer, allocatable, dimension(:) :: ipy
   integer, allocatable, dimension(:) :: ipz
-
-  ! i_plus2 equals left lattice 
-  !point plus 2, which means the right lattice point after forward move  
+  !
+  ! ip2x equals current lattice vertex plus 2, which means the right lattice 
+  ! vertex after forward move  
   integer, allocatable, dimension(:) :: ip2x  
   integer, allocatable, dimension(:) :: ip2y
   integer, allocatable, dimension(:) :: ip2z
-
-  ! i_minus equals left lattice
-  !point minus 1, which means the left lattice point after backward move
+  !
+  ! imx equals current lattice vertex minus 1, which means the left lattice 
+  ! vertex after backward move
   integer, allocatable, dimension(:) :: imx  
   integer, allocatable, dimension(:) :: imy
   integer, allocatable, dimension(:) :: imz
-  
-  integer, allocatable, dimension(:,:) :: bonds  ! bonds vector array
-  integer, allocatable, dimension(:,:) :: move   ! bond number after 6 kinds 
-  ! of move
-  real*8, allocatable, dimension(:) :: b1   ! bonds length array
-  real*8, allocatable, dimension(:) :: b12  ! square of bonds length array
+  !
+  ! record 108 probable bond vector
+  integer, allocatable, dimension(:,:) :: bonds  
+  !
+  ! bond number after 6 kinds of move
+  integer, allocatable, dimension(:,:) :: move    
+  ! 
+  ! bonds length array
+  real*8, allocatable, dimension(:) :: b1   
+  !
+  ! square of bonds length array
+  real*8, allocatable, dimension(:) :: b12  
 !########################end arrays########################!
 
 

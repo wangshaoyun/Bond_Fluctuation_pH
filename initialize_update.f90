@@ -226,6 +226,57 @@ subroutine initialize_ions
 end subroutine initialize_ions
 
 
+subroutine error_analysis(n, EE)
+  use global_variables
+  use compute_energy
+  implicit none
+  integer, intent(in) :: n
+  real*8, intent(out) :: EE
+  real*8 :: EE1, EE2, absolute_error, relative_error
+  real*8 :: real_time, fourier_time
+
+!   call energy_ewald_module(n, EE1)
+
+  EE1=0
+
+  call energy_lookup_table(EE2, real_time, fourier_time)
+
+  absolute_error = abs(EE2-EE1)
+
+  relative_error = absolute_error / EE1
+
+  EE = EE2
+
+  write(*,*) 
+  write(*,*) '******************error_analysis********************'
+  write(*,*) 'absolute error         absolute_error:', absolute_error
+  write(*,*) 'relative error         relative_error:', relative_error
+  write(*,*) 'real time                   real_time:', real_time
+  write(*,*) 'fourier time             fourier_time:', fourier_time
+  write(*,*) '****************************************************'
+  write(*,*) 
+  write(*,*) 
+
+end subroutine error_analysis
+
+
+! subroutine energy_ewald_module(n, EE1)
+!   use global_variables
+!   use compute_energy_ewald
+!   implicit none
+!   integer, intent(in) :: n
+!   real*8, intent(out) :: EE1
+!   real*8, intent(out) :: time_ewald
+
+!   if (n==0) then
+!     call initialize_energy_parameters
+!   end if
+
+!   call error_analysis_ewald(EE1)
+
+! end subroutine energy_ewald_module
+
+
 subroutine monte_carlo_move( EE, DeltaE )
   use global_variables
   implicit none
@@ -237,9 +288,9 @@ subroutine monte_carlo_move( EE, DeltaE )
     if ( mod(i,DeltaStep) == 0 ) then
       call choose_particle_pH
       if (pos(ip,4)==0) then
-        call add_particle
+        call add_particle(EE,DeltaE)
       else
-        call delete_particle
+        call delete_particle(EE,DeltaE)
       end if
     else
       call choose_particle
@@ -260,7 +311,7 @@ subroutine choose_particle_pH
   call random_number( rnd )
   i = floor(rnd*Nq_PE) + 1
   ip = charge(i)
-  ip1 = Npe + ip
+  ip1 = Npe + i
 
 end subroutine choose_particle_pH
 
@@ -269,12 +320,16 @@ subroutine add_particle
   use global_variables
   use compute_energy
   implicit none
-  real*8 :: rnd(3)
+  real*8 :: rnd(3), U_prot
   integer :: xi,yi,zi,xp,yp,zp,total
+
+  U_prot = log(10)/beta*pH_pKa !+: add, -:delete
 
   pos_ip0 = pos(ip,:)
   pos_ip0i = pos(ip1,:)
 
+  !
+  !new position
   call random_number(rnd)
   pos_ip1i(1) = floor(rnd(1)*Lx2)+1
   pos_ip1i(2) = floor(rnd(2)*Ly2)+1
@@ -282,6 +337,8 @@ subroutine add_particle
   pos_ip1i(4) = -qq/abs(qq)
   pos_ip1 = pos_ip0
   pos_ip1(4) = qq
+  !
+  !judge the excluded volume condition
   xi = pos_ip1i(1)
   yi = pos_ip1i(2)
   zi = pos_ip1i(3)
@@ -292,7 +349,7 @@ subroutine add_particle
           latt(xp,yi,zi)+latt(xp,yi,zp)+latt(xp,yp,zi)+latt(xp,yp,zp)
   if (total == 0) then
     call Delta_Energy_add(DeltaE)
-    if (DeltaE<0) then
+    if ((DeltaE+U_prot)<0) then
       latt(xi,yi,zi) = 1
       latt(xi,yi,zp) = 1
       latt(xi,yp,zi) = 1
@@ -307,7 +364,7 @@ subroutine add_particle
       call update_charge_cell_list_add
     else
       call random_number(rnd)
-      if (rnd<exp(-DeltaE*beta)) then
+      if (rnd<exp(-(DeltaE+U_prot)*beta)) then
         latt(xi,yi,zi) = 1
         latt(xi,yi,zp) = 1
         latt(xi,yp,zi) = 1
@@ -331,7 +388,10 @@ subroutine delete_particle
   use global_variables
   use compute_energy
   implicit none
+  real*8 :: U_prot
   integer :: xi, yi, zi, xp, yp, zp
+
+  U_prot = log(10)/beta*pH_pKa !+: add, -:delete
 
   pos_ip0 = pos(ip,:)
   pos_ip1 = pos_ip0
@@ -346,7 +406,7 @@ subroutine delete_particle
   yp = ipy(yi)
   zp = ipz(zi)
   call Delta_Energy_delete(DeltaE)
-  if (DeltaE<0) then
+  if ((DeltaE-U_prot)<0) then
     latt(xi,yi,zi) = 0
     latt(xi,yi,zp) = 0
     latt(xi,yp,zi) = 0
@@ -361,7 +421,7 @@ subroutine delete_particle
     call update_charge_cell_list_delete
   else
     call random_number(rnd)
-    if (rnd<(exp(-DeltaE*beta))) then
+    if (rnd<(exp(-(DeltaE-U_prot)*beta))) then
       latt(xi,yi,zi) = 0
       latt(xi,yi,zp) = 0
       latt(xi,yp,zi) = 0
