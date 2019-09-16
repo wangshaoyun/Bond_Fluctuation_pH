@@ -151,11 +151,11 @@ subroutine data_operation
   nx = nint( sqrt(1.*Nga) )    
   Lx2 = Lx2 - mod( Lx2, nx )
   Ly2 = Lx2
-  sigmag1 = 1.D0 * Nga / Lx / Ly  ! true grafting density
   Z_empty = ( 1.*Lz2 + 1.*Lz2 * Z_empty ) / (1.*Lz2)
   Lx = Lx2/2.D0
   Ly = Ly2/2.D0
   Lz = Lz2/2.D0
+  sigmag1 = 1.D0 * Nga / Lx / Ly  ! true grafting density
   !
   !number of bonds in system
   N_bond = Nma * arm * Nga

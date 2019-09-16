@@ -255,67 +255,77 @@ subroutine pre_calculate_fourier_space
   use global_variables
   implicit none
   include "fftw3.f90"
-  integer :: i, j, k, k2, p, q, r
-  real*8 :: kx,ky,kz
-  complex(kind=8) :: exp_x,exp_y,exp_z
+  integer :: i, j, k, p, q, r
+  real*8 :: kx,ky,kz,krx,kry,krz,k2
+  complex(kind=8) :: exp_x,exp_y,exp_z,test,a1,a2,a3
   complex(kind=8), allocatable, dimension(:,:,:) :: exp_k2
   complex(kind=8), allocatable, dimension(:,:,:) :: FT_exp_k2
   integer ( kind = 8 ) plan_backward
   integer ( kind = 8 ) plan_forward
   integer ( kind = 8 ) plan
+!   complex(kind=8) :: fij
+!   integer :: rr(3)
+
+  alpha = pi/2/tol
+  alpha2 = alpha*alpha
+  rcc = 2*tol*tol/pi*2       !2*2.5*2.5/pi*2=7.96, lattice unit
+  rcc2 = rcc*rcc
+  write(*,*) 'rcc=',rcc
 
   Kmax1 = Lx2
   Kmax2 = Ly2
   Kmax3 = nint(Lz2*Z_empty)
   if ( mod(Kmax1,2) == 0 ) then
     K1_half = Kmax1 / 2
-    exp_x = cmplx(cos(pi),-sin(pi))
+    exp_x = cmplx(-1,0)
   else
     K1_half = (Kmax1-1) / 2
     exp_x = cmplx(cos(pi*(Kmax1-1)/Kmax1),sin(pi*(Kmax1-1)/Kmax1))
   end if
   if ( mod(Kmax2,2) == 0 ) then
     K2_half = Kmax2 / 2
-    exp_y = cmplx(cos(pi),-sin(pi))
+    exp_y = cmplx(-1,0)
   else
     K2_half = (Kmax2-1) / 2
     exp_y = cmplx(cos(pi*(Kmax2-1)/Kmax2),sin(pi*(Kmax2-1)/Kmax2))
   end if
   if ( mod(Kmax3,2) == 0 ) then
     K3_half = Kmax3 / 2
-    exp_z = cmplx(cos(pi),-sin(pi))
+    exp_z = cmplx(-1,0)
   else
     K3_half = (Kmax3-1) / 2
     exp_z = cmplx(cos(pi*(Kmax3-1)/Kmax3),sin(pi*(Kmax3-1)/Kmax3))
   end if
 
-  rcc = tol*tol/pi*2              !2.5*2.5/pi*2=3.98, lattice unit
-  rcc2 = rcc*rcc
-  alpha = tol / (rcc/2)           !alpha = 2.5/3, sigma unit
-  alpha2 = alpha * alpha 
-
   !
   !for the maxium situation sigmag=1e-3, (500,500,1200), it will need 9.6G RAM
   if (allocated(exp_k2)) deallocate( exp_k2 )
   if (allocated(FT_exp_k2)) deallocate( FT_exp_k2 )
-  allocate( exp_k2(Kmax1,Kmax2,Kmax3) )
-  allocate( FT_exp_k2(Kmax1,Kmax2,Kmax3) )
+  allocate( exp_k2(1:Kmax1,1:Kmax2,1:Kmax3) )
+  allocate( FT_exp_k2(1:Kmax1,1:Kmax2,1:Kmax3) )
 
+!   fij=0
+!   rr=(/-60,-60,-200/)
   do i = 1, Kmax1
     do j = 1, Kmax2
       do k = 1, Kmax3
-        kx = 2*pi*(i-K1_half-1)/Lx2
-        ky = 2*pi*(j-K2_half-1)/Ly2
-        kz = 2*pi*(k-K3_half-1)/Lz2
+        kx = 2*pi*(i-K1_half-1)/Kmax1
+        ky = 2*pi*(j-K2_half-1)/Kmax2
+        kz = 2*pi*(k-K3_half-1)/Kmax3
         k2 = kx*kx + ky*ky + kz*kz
         if (k2 == 0) then
           exp_k2(i,j,k) = 0
         else
-          exp_k2(i,j,k) = cmplx(exp(-1.D0*k2/4/alpha)/k2,0)
+          exp_k2(i,j,k) = cmplx(exp(-k2/4/alpha2)/k2,0)
         end if
+        krx = kx*rr(1)
+        kry = ky*rr(2)
+        krz = kz*rr(3)
+!         fij = fij + exp_k2(i,j,k)*cmplx(cos(krx+kry+krz),sin(krx+kry+krz))
       end do
     end do
   end do
+!   fij = (lb/beta*2*pi/(Lx*Ly*Lz*Z_empty))*fij
 
   call dfftw_plan_dft_3d_ ( plan_forward, Kmax1, Kmax2, Kmax3, exp_k2, FT_exp_k2, FFTW_FORWARD, FFTW_Estimate ) 
 
@@ -326,27 +336,30 @@ subroutine pre_calculate_fourier_space
   deallocate(exp_k2)
 
   if (allocated(fourier_ij)) deallocate( fourier_ij )
-
   allocate( fourier_ij( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) ) )
 
   do i = 1, Kmax1
     do j = 1, Kmax2 
       do k = 1, Kmax3
+        p=i-1
+        q=j-1
+        r=k-1
         if ( i > Kmax1-K1_half-1 ) then
-          p = i - Kmax1
+          p = p - Kmax1
         end if
         if ( j > Kmax2-K2_half-1 ) then
-          q = j - Kmax2
+          q = q - Kmax2
         end if
         if ( k > Kmax3-K3_half-1 ) then
-          r = k - Kmax3
+          r = r - Kmax3
         end if
-        fourier_ij(p,q,r) = real( (exp_x**p) * (exp_y**q) * (exp_z**r) * &
-          &                      FT_exp_k2(i,j,k) )
+        fourier_ij(p,q,r) = real( ( exp_x**(-p)) * (exp_y**(-q)) &
+                            * (exp_z**(-r) ) *  FT_exp_k2(i,j,k) )
       end do
     end do
   end do
-  fourier_ij = lb/beta*2*pi*8/(Lx*Ly*Lz*Z_empty)*fourier_ij
+
+  fourier_ij = (lb/beta*2*pi/(Lx*Ly*Lz*Z_empty))*fourier_ij
   deallocate(FT_exp_k2)
 
 end subroutine pre_calculate_fourier_space
