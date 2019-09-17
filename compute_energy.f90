@@ -64,6 +64,9 @@ save
   integer, allocatable, dimension( : ), private :: periodic_y
   !
   !Periodic condition  
+  integer, allocatable, dimension( : ), private :: periodic_z
+  !
+  !Periodic condition  
   integer, allocatable, dimension( : ), private :: fourier_x
   !
   !Periodic condition  
@@ -162,6 +165,7 @@ subroutine Periodic_array
 
   allocate(periodic_x(-Lx2:Lx2))
   allocate(periodic_y(-Ly2:Ly2))
+  allocate(periodic_z(-Lz2:Lz2))
   allocate(fourier_x(-Lx2:Lx2))
   allocate(fourier_y(-Ly2:Ly2))
   allocate(fourier_z(-Lz2:Lz2))
@@ -191,7 +195,12 @@ subroutine Periodic_array
         periodic_x(i) = i
       end if
     end do
-  end if 
+  end if
+  do i = -Lx2, Lx2
+    if (Periodic_x(i)<0) then
+      periodic_x(i) = -Periodic_x(i)
+    end if
+  end do
 
   if (mod(Ly2,2) == 0) then
     do i = -Ly2, Ly2
@@ -214,19 +223,32 @@ subroutine Periodic_array
       end if
     end do
   end if 
-
-  do i = -Lx2, Lx2
-    fourier_x(i) = Periodic_x(i) + K1_half + 1
-    fourier_x(i) = (fourier_x(i)-1)*Kmax2*Kmax3
-  end do
-
   do i = -Ly2, Ly2
-    fourier_y(i) = Periodic_y(i) + K2_half + 1
-    fourier_y(i) = (fourier_y(i)-1)*Kmax3
+    if (Periodic_y(i)<0) then
+      periodic_y(i) = -Periodic_y(i)
+    end if
   end do
 
   do i = -Lz2, Lz2
-    fourier_z(i) = i + K3_half + 1
+    if (i>=0) then
+      Periodic_z(i) = i;
+    else
+      Periodic_z(i) = -i;
+    end if 
+  end do
+
+  do i = -Lx2, Lx2
+    fourier_x(i) = Periodic_x(i) + 1
+    fourier_x(i) = (fourier_x(i)-1)*(K2_half+1)*(Lz2+1)
+  end do
+
+  do i = -Ly2, Ly2
+    fourier_y(i) = Periodic_y(i) + 1
+    fourier_y(i) = (fourier_y(i)-1)*(Lz2+1)
+  end do
+
+  do i = -Lz2, Lz2
+    fourier_z(i) = Periodic_z(i) + 1
   end do
 
 
@@ -270,10 +292,8 @@ subroutine energy_lookup_table(EE, rt, ft)
           x = pos(m,1) - pos(l,1)
           y = pos(m,2) - pos(l,2)
           z = pos(m,3) - pos(l,3)
-          x = periodic_x(x)
-          y = periodic_y(y)
           if ((x*x+y*y+z*z)<rcc2) then
-            EE = EE + pos(m,4)*pos(l,4)*real_ij(x,y,z)
+            EE = EE + pos(m,4)*pos(l,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
           end if
         end if
         k = cell_list_r(k)
@@ -288,7 +308,7 @@ subroutine energy_lookup_table(EE, rt, ft)
   !
   !fourier space
   call cpu_time(st)
-!   write(*,*) size(fourier_ij,1),size(fourier_ij,2),size(fourier_ij,3)
+  write(*,*) size(fourier_ij)
   do i = 1, Nq
     m = charge(i)
     EE2=0
@@ -300,12 +320,12 @@ subroutine energy_lookup_table(EE, rt, ft)
       if (m/=n) then
         x1 = x - pos(n,1)
         y1 = y - pos(n,2)
-        z1 = z - pos(n,3)    
-        x1 = fourier_x(x1)
-        y1 = fourier_y(y1)
-        z1 = fourier_z(z1)
-        t = x1 + y1 + z1
-        EE2 = EE2 + pos(n,4)*fourier_ij(t)
+        z1 = z - pos(n,3)  
+        t = fourier_x(x1)+fourier_y(y1)+fourier_z(z1)
+        if (t<1 .or. t>(K1_half+1)*(K2_half+1)*(Lz2+1)) then
+          write(*,*) t,x1,y1,z1,fourier_x(x1),fourier_y(y1),fourier_z(z1)
+        end if
+        EE2=EE2+pos(n,4)*fourier_ij(fourier_x(x1)+fourier_y(y1)+fourier_z(z1))
       end if
     end do
     EE2= pos(m,4)*EE2
@@ -437,16 +457,16 @@ subroutine pre_calculate_fourier_space
   fourier_ij1 = (lb/beta*4*pi/(Lx*Ly*Lz*Z_empty))*fourier_ij1
 
   if (allocated(fourier_ij)) deallocate( fourier_ij )
-  allocate( fourier_ij(Kmax1*Kmax2*Kmax3) )  
+  allocate( fourier_ij( (K1_half+1)*(K2_half+1)*(Lz2+1) ) )  
 
-  do i = -K1_half,(Kmax1-K1_half-1)
-    do j = -K2_half,(Kmax2-K2_half-1)
-      do k = -K3_half,(Kmax3-K3_half-1)
-        p = i + K1_half + 1
-        q = j + K2_half + 1
-        r = k + K3_half + 1
-        t = (p-1)*Kmax1*Kmax2 + (q-1)*Kmax3 + r
-        fourier_ij(t) = fourier_ij1(i,j,k)
+  do i = 0, K1_half
+    do j = 0, K2_half
+      do k = 0, Lz2
+        p = i + 1
+        q = j + 1
+        r = k + 1
+        t = (p-1)*(K2_half+1)*(Lz2+1) + (q-1)*(Lz2+1) + r
+        fourier_ij(t) = fourier_ij1(-i,-j,-k)
       end do
     end do
   end do
@@ -464,11 +484,11 @@ subroutine pre_calculate_real_space
 
   nnl = nint(rcc)   ! cut off length, lattice unit
   if (allocated(real_ij)) deallocate(real_ij)
-  allocate( real_ij(-nnl:nnl, -nnl:nnl, -nnl:nnl) )
+  allocate( real_ij(0:nnl, 0:nnl, 0:nnl) )
 
-  do i = -nnl, nnl
-    do j = -nnl, nnl
-      do k = -nnl, nnl
+  do i = 0, nnl
+    do j = 0, nnl
+      do k = 0, nnl
         x = i/2.D0                      !sigma unit
         y = j/2.D0
         z = k/2.D0
@@ -703,10 +723,8 @@ subroutine Delta_Energy(DeltaE)
         x = pos_ip0(1) - pos(k,1)
         y = pos_ip0(2) - pos(k,2)
         z = pos_ip0(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<=rcc2) then
-          EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE1 = EE1 + pos_ip0(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
     end do
@@ -729,10 +747,8 @@ subroutine Delta_Energy(DeltaE)
         x = pos_ip1(1) - pos(k,1)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<=rcc2) then
-          EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE2 = EE2 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
     end do
@@ -811,10 +827,8 @@ subroutine Delta_Energy_add(DeltaE)
       x = pos_ip1(1) - pos(k,1)
       y = pos_ip1(2) - pos(k,2)
       z = pos_ip1(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
-      if ((x*x+y*y+z*z)<=rcc2) then
-        EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
+      if ((x*x+y*y+z*z)<rcc2) then
+        EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
     end do
   end do
@@ -835,10 +849,8 @@ subroutine Delta_Energy_add(DeltaE)
       x = pos_ip1i(1) - pos(k,1)
       y = pos_ip1i(2) - pos(k,2)
       z = pos_ip1i(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
-      if ((x*x+y*y+z*z)<=rcc2) then
-        EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
+      if ((x*x+y*y+z*z)<rcc2) then
+        EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
     end do
   end do
@@ -855,6 +867,7 @@ subroutine Delta_Energy_add(DeltaE)
   z1 = fourier_z(z)
   x = Periodic_x(x)
   y = Periodic_y(y)
+  z = Periodic_z(z)
   t = x1 + y1 + z1
   DeltaE = DeltaE + qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
 
@@ -931,10 +944,8 @@ subroutine Delta_Energy_delete(DeltaE)
         x = pos_ip1(1) - pos(k,1)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<=rcc2) then
-          EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
     end do
@@ -957,10 +968,8 @@ subroutine Delta_Energy_delete(DeltaE)
         x = pos_ip1i(1) - pos(k,1)
         y = pos_ip1i(2) - pos(k,2)
         z = pos_ip1i(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<=rcc2) then
-          EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE2 = EE2 + pos_ip1i(3)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
     end do
@@ -977,6 +986,7 @@ subroutine Delta_Energy_delete(DeltaE)
   z1 = fourier_z(z)
   x = Periodic_x(x)
   y = Periodic_y(y)
+  z = Periodic_z(z)
   t = x1 + y1 + z1
   DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
   !
