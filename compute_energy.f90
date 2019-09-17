@@ -76,7 +76,7 @@ save
   integer, allocatable, dimension( : ), private :: fourier_z
   !
   !Coulomb energy of i,j in fourier space
-  real,  allocatable, dimension(:), private :: fourier_ij 
+  real,  allocatable, dimension(:,:,:), private :: fourier_ij 
   !
   !Coulomb energy of i,j in real space
   real,  allocatable, dimension(:,:,:), private :: real_ij 
@@ -196,11 +196,11 @@ subroutine Periodic_array
       end if
     end do
   end if
-  do i = -Lx2, Lx2
-    if (Periodic_x(i)<0) then
-      periodic_x(i) = -Periodic_x(i)
-    end if
-  end do
+!   do i = -Lx2, Lx2
+!     if (Periodic_x(i)<0) then
+!       periodic_x(i) = -Periodic_x(i)
+!     end if
+!   end do
 
   if (mod(Ly2,2) == 0) then
     do i = -Ly2, Ly2
@@ -223,33 +223,33 @@ subroutine Periodic_array
       end if
     end do
   end if 
-  do i = -Ly2, Ly2
-    if (Periodic_y(i)<0) then
-      periodic_y(i) = -Periodic_y(i)
-    end if
-  end do
+!   do i = -Ly2, Ly2
+!     if (Periodic_y(i)<0) then
+!       periodic_y(i) = -Periodic_y(i)
+!     end if
+!   end do
 
-  do i = -Lz2, Lz2
-    if (i>=0) then
-      Periodic_z(i) = i;
-    else
-      Periodic_z(i) = -i;
-    end if 
-  end do
+!   do i = -Lz2, Lz2
+!     if (i>=0) then
+!       Periodic_z(i) = i;
+!     else
+!       Periodic_z(i) = -i;
+!     end if 
+!   end do
 
-  do i = -Lx2, Lx2
-    fourier_x(i) = Periodic_x(i) + 1
-    fourier_x(i) = (fourier_x(i)-1)*(K2_half+1)*(Lz2+1)
-  end do
+!   do i = -Lx2, Lx2
+!     fourier_x(i) = Periodic_x(i) + 1
+!     fourier_x(i) = (fourier_x(i)-1)*(K2_half+1)*(Lz2+1)
+!   end do
 
-  do i = -Ly2, Ly2
-    fourier_y(i) = Periodic_y(i) + 1
-    fourier_y(i) = (fourier_y(i)-1)*(Lz2+1)
-  end do
+!   do i = -Ly2, Ly2
+!     fourier_y(i) = Periodic_y(i) + 1
+!     fourier_y(i) = (fourier_y(i)-1)*(Lz2+1)
+!   end do
 
-  do i = -Lz2, Lz2
-    fourier_z(i) = Periodic_z(i) + 1
-  end do
+!   do i = -Lz2, Lz2
+!     fourier_z(i) = Periodic_z(i) + 1
+!   end do
 
 
 !   open(100,file='./data/periodic_xy.txt')
@@ -293,8 +293,11 @@ subroutine energy_lookup_table(EE, rt, ft)
           y = pos(m,2) - pos(l,2)
           z = pos(m,3) - pos(l,3)
           if ((x*x+y*y+z*z)<rcc2) then
-            EE = EE + pos(m,4)*pos(l,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+            EE = EE + pos(m,4)*pos(l,4)*real_ij(periodic_x(x),periodic_y(y),z)
           end if
+!           if ((x*x+y*y+z*z)<rcc2) then
+!             EE = EE + pos(m,4)*pos(l,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!           end if
         end if
         k = cell_list_r(k)
       end do
@@ -321,11 +324,20 @@ subroutine energy_lookup_table(EE, rt, ft)
         x1 = x - pos(n,1)
         y1 = y - pos(n,2)
         z1 = z - pos(n,3)  
-        t = fourier_x(x1)+fourier_y(y1)+fourier_z(z1)
-        if (t<1 .or. t>(K1_half+1)*(K2_half+1)*(Lz2+1)) then
-          write(*,*) t,x1,y1,z1,fourier_x(x1),fourier_y(y1),fourier_z(z1)
+        x1 = Periodic_x(x1)
+        y1 = Periodic_y(y1)
+        if (x1<-K1_half .or. x1>Kmax1-K1_half-1) then
+          write(*,*) 'x1',x1,y1,z1
         end if
-        EE2=EE2+pos(n,4)*fourier_ij(fourier_x(x1)+fourier_y(y1)+fourier_z(z1))
+        if (y1<-K2_half .or. y1>Kmax2-K2_half-1) then
+          write(*,*) 'y1',x1,y1,z1
+        end if
+        if (z1<-K3_half .or. z1>Kmax3-K3_half-1) then
+          write(*,*) 'z1',x1,y1,z1
+        end if
+        EE2 = EE2 + pos(n,4)*fourier_ij(x1,y1,z1)
+!         t = fourier_x(x1)+fourier_y(y1)+fourier_z(z1)
+!      EE2=EE2+pos(n,4)*fourier_ij(fourier_x(x1)+fourier_y(y1)+fourier_z(z1))
       end if
     end do
     EE2= pos(m,4)*EE2
@@ -456,20 +468,27 @@ subroutine pre_calculate_fourier_space
 
   fourier_ij1 = (lb/beta*4*pi/(Lx*Ly*Lz*Z_empty))*fourier_ij1
 
-  if (allocated(fourier_ij)) deallocate( fourier_ij )
-  allocate( fourier_ij( (K1_half+1)*(K2_half+1)*(Lz2+1) ) )  
+!   if (allocated(fourier_ij)) deallocate( fourier_ij )
+!   allocate( fourier_ij( (K1_half+1)*(K2_half+1)*(Lz2+1) ) )  
 
-  do i = 0, K1_half
-    do j = 0, K2_half
-      do k = 0, Lz2
-        p = i + 1
-        q = j + 1
-        r = k + 1
-        t = (p-1)*(K2_half+1)*(Lz2+1) + (q-1)*(Lz2+1) + r
-        fourier_ij(t) = fourier_ij1(-i,-j,-k)
-      end do
-    end do
-  end do
+!   do i = 0, K1_half
+!     do j = 0, K2_half
+!       do k = 0, Lz2
+!         p = i + 1
+!         q = j + 1
+!         r = k + 1
+!         t = (p-1)*(K2_half+1)*(Lz2+1) + (q-1)*(Lz2+1) + r
+!         fourier_ij(t) = fourier_ij1(-i,-j,-k)
+!       end do
+!     end do
+!   end do
+!   deallocate(fourier_ij1)
+
+  if (allocated(fourier_ij)) deallocate( fourier_ij )
+  allocate( fourier_ij( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) ) )  
+
+  fourier_ij = fourier_ij1
+
   deallocate(fourier_ij1)
 
 end subroutine pre_calculate_fourier_space
@@ -483,12 +502,29 @@ subroutine pre_calculate_real_space
   real*8 :: rr, x, y, z
 
   nnl = nint(rcc)   ! cut off length, lattice unit
-  if (allocated(real_ij)) deallocate(real_ij)
-  allocate( real_ij(0:nnl, 0:nnl, 0:nnl) )
+!   if (allocated(real_ij)) deallocate(real_ij)
+!   allocate( real_ij(0:nnl, 0:nnl, 0:nnl) )
 
-  do i = 0, nnl
-    do j = 0, nnl
-      do k = 0, nnl
+!   do i = 0, nnl
+!     do j = 0, nnl
+!       do k = 0, nnl
+!         x = i/2.D0                      !sigma unit
+!         y = j/2.D0
+!         z = k/2.D0
+!         rr = sqrt(x*x+y*y+z*z)
+!         real_ij(i,j,k) = erfc(alpha*rr)/rr
+!       end do
+!     end do
+!   end do
+
+!   real_ij = real_ij * lb / beta
+
+  if (allocated(real_ij)) deallocate(real_ij)
+  allocate( real_ij(-nnl:nnl, -nnl:nnl, -nnl:nnl) )
+
+  do i = -nnl, nnl
+    do j = -nnl, nnl
+      do k = -nnl, nnl
         x = i/2.D0                      !sigma unit
         y = j/2.D0
         z = k/2.D0
@@ -675,97 +711,97 @@ subroutine Delta_Energy(DeltaE)
 
   DeltaE = 0
 
-  !
-  ! Fourier Space
-  EE1 = 0
-  EE2 = 0
-  j = cell_list_q(Nq+1)
-  do while (j/=0)
-    k = charge(j)
-    if (k/=ip) then
-      x1 = pos_ip0(1) - pos(k,1)
-      y1 = pos_ip0(2) - pos(k,2)
-      z1 = pos_ip0(3) - pos(k,3)     
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE1 = EE1 + pos(k,4)*fourier_ij(t)
+!   !
+!   ! Fourier Space
+!   EE1 = 0
+!   EE2 = 0
+!   j = cell_list_q(Nq+1)
+!   do while (j/=0)
+!     k = charge(j)
+!     if (k/=ip) then
+!       x1 = pos_ip0(1) - pos(k,1)
+!       y1 = pos_ip0(2) - pos(k,2)
+!       z1 = pos_ip0(3) - pos(k,3)     
+!       x1 = fourier_x(x1)
+!       y1 = fourier_y(y1)
+!       z1 = fourier_z(z1)
+!       t = x1 + y1 + z1
+!       EE1 = EE1 + pos(k,4)*fourier_ij(t)
 
-      x1 = pos_ip1(1) - pos(k,1)
-      y1 = pos_ip1(2) - pos(k,2)
-      z1 = pos_ip1(3) - pos(k,3)
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE2 = EE2 + pos(k,4)*fourier_ij(t)
-    end if
-  end do
+!       x1 = pos_ip1(1) - pos(k,1)
+!       y1 = pos_ip1(2) - pos(k,2)
+!       z1 = pos_ip1(3) - pos(k,3)
+!       x1 = fourier_x(x1)
+!       y1 = fourier_y(y1)
+!       z1 = fourier_z(z1)
+!       t = x1 + y1 + z1
+!       EE2 = EE2 + pos(k,4)*fourier_ij(t)
+!     end if
+!   end do
 
-  DeltaE = pos_ip1(4) * (EE2-EE1)
+!   DeltaE = pos_ip1(4) * (EE2-EE1)
 
-  !
-  ! Real Space
-  EE1 = 0
-  icelx = int(pos_ip0(1)/clx)+1
-  icely = int(pos_ip0(2)/cly)+1
-  icelz = int(pos_ip0(3)/clz)+1
-  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
-  do i = 1, cell_near_list(ncel,28,1)
-    icelx = cell_near_list(ncel,i,1)
-    icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
-    j = hoc_r(icelx,icely,icelz) 
-    do while (j/=0) 
-      k = charge(j)
-      if (k/=ip) then
-        x = pos_ip0(1) - pos(k,1)
-        y = pos_ip0(2) - pos(k,2)
-        z = pos_ip0(3) - pos(k,3)
-        if ((x*x+y*y+z*z)<rcc2) then
-          EE1 = EE1 + pos_ip0(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
-        end if
-      end if
-    end do
-  end do
-  EE1 = EE1 * pos_ip1(4)
+!   !
+!   ! Real Space
+!   EE1 = 0
+!   icelx = int(pos_ip0(1)/clx)+1
+!   icely = int(pos_ip0(2)/cly)+1
+!   icelz = int(pos_ip0(3)/clz)+1
+!   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+!   do i = 1, cell_near_list(ncel,28,1)
+!     icelx = cell_near_list(ncel,i,1)
+!     icely = cell_near_list(ncel,i,2)
+!     icelz = cell_near_list(ncel,i,3)   
+!     j = hoc_r(icelx,icely,icelz) 
+!     do while (j/=0) 
+!       k = charge(j)
+!       if (k/=ip) then
+!         x = pos_ip0(1) - pos(k,1)
+!         y = pos_ip0(2) - pos(k,2)
+!         z = pos_ip0(3) - pos(k,3)
+!         if ((x*x+y*y+z*z)<rcc2) then
+!           EE1 = EE1 + pos_ip0(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!         end if
+!       end if
+!     end do
+!   end do
+!   EE1 = EE1 * pos_ip1(4)
 
-  EE2 = 0
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
-  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
-  do i = 1, cell_near_list(ncel,28,1)
-    icelx = cell_near_list(ncel,i,1)
-    icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
-    j = hoc_r(icelx,icely,icelz) 
-    do while (j/=0) 
-      k = charge(j)
-      if (k/=ip) then
-        x = pos_ip1(1) - pos(k,1)
-        y = pos_ip1(2) - pos(k,2)
-        z = pos_ip1(3) - pos(k,3)
-        if ((x*x+y*y+z*z)<rcc2) then
-          EE2 = EE2 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
-        end if
-      end if
-    end do
-  end do
-  EE2 = EE2 * pos_ip1(4)
-  DeltaE = DeltaE + EE2 - EE1
+!   EE2 = 0
+!   icelx = int(pos_ip1(1)/clx)+1
+!   icely = int(pos_ip1(2)/cly)+1
+!   icelz = int(pos_ip1(3)/clz)+1
+!   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+!   do i = 1, cell_near_list(ncel,28,1)
+!     icelx = cell_near_list(ncel,i,1)
+!     icely = cell_near_list(ncel,i,2)
+!     icelz = cell_near_list(ncel,i,3)   
+!     j = hoc_r(icelx,icely,icelz) 
+!     do while (j/=0) 
+!       k = charge(j)
+!       if (k/=ip) then
+!         x = pos_ip1(1) - pos(k,1)
+!         y = pos_ip1(2) - pos(k,2)
+!         z = pos_ip1(3) - pos(k,3)
+!         if ((x*x+y*y+z*z)<rcc2) then
+!           EE2 = EE2 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!         end if
+!       end if
+!     end do
+!   end do
+!   EE2 = EE2 * pos_ip1(4)
+!   DeltaE = DeltaE + EE2 - EE1
 
-  !
-  ! Modified term of slab geometry
-  dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))/2.D0         !sigma unit
+!   !
+!   ! Modified term of slab geometry
+!   dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))/2.D0         !sigma unit
 
-  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+!   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
 
-  Mz = Mz + dMz
-  !
-  ! External field energy
-  DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
+!   Mz = Mz + dMz
+!   !
+!   ! External field energy
+!   DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
 
 end subroutine Delta_Energy
 
@@ -780,105 +816,105 @@ subroutine Delta_Energy_add(DeltaE)
 
   DeltaE = 0
 
-  !
-  ! Fourier Space
-  EE1 = 0
-  EE2 = 0
-  qq1 = pos_ip1(4)
-  qq2 = pos_ip1i(4)
-  j = cell_list_q(Nq+1)
-  do while (j/=0)
-    k = charge(j)
-    x1 = pos_ip0(1) - pos(k,1)
-    y1 = pos_ip0(2) - pos(k,2)
-    z1 = pos_ip0(3) - pos(k,3)     
-    x1 = fourier_x(x1)
-    y1 = fourier_y(y1)
-    z1 = fourier_z(z1)
-    t = x1 + y1 + z1
-    EE1 = EE1 + pos(k,4)*fourier_ij(t)
+!   !
+!   ! Fourier Space
+!   EE1 = 0
+!   EE2 = 0
+!   qq1 = pos_ip1(4)
+!   qq2 = pos_ip1i(4)
+!   j = cell_list_q(Nq+1)
+!   do while (j/=0)
+!     k = charge(j)
+!     x1 = pos_ip0(1) - pos(k,1)
+!     y1 = pos_ip0(2) - pos(k,2)
+!     z1 = pos_ip0(3) - pos(k,3)     
+!     x1 = fourier_x(x1)
+!     y1 = fourier_y(y1)
+!     z1 = fourier_z(z1)
+!     t = x1 + y1 + z1
+!     EE1 = EE1 + pos(k,4)*fourier_ij(t)
 
-    x1 = pos_ip1(1) - pos(k,1)
-    y1 = pos_ip1(2) - pos(k,2)
-    z1 = pos_ip1(3) - pos(k,3)
-    x1 = fourier_x(x1)
-    y1 = fourier_y(y1)
-    z1 = fourier_z(z1)
-    t = x1 + y1 + z1
-    EE2 = EE2 + pos(k,4)*fourier_ij(t)
-  end do
+!     x1 = pos_ip1(1) - pos(k,1)
+!     y1 = pos_ip1(2) - pos(k,2)
+!     z1 = pos_ip1(3) - pos(k,3)
+!     x1 = fourier_x(x1)
+!     y1 = fourier_y(y1)
+!     z1 = fourier_z(z1)
+!     t = x1 + y1 + z1
+!     EE2 = EE2 + pos(k,4)*fourier_ij(t)
+!   end do
 
-  DeltaE = EE1*qq1 + EE2*qq2
+!   DeltaE = EE1*qq1 + EE2*qq2
 
-  !
-  ! Real Space
-  EE1 = 0
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
-  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
-  do i = 1, cell_near_list(ncel,28,1)
-    icelx = cell_near_list(ncel,i,1)
-    icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
-    j = hoc_r(icelx,icely,icelz) 
-    do while (j/=0) 
-      k = charge(j)
-      x = pos_ip1(1) - pos(k,1)
-      y = pos_ip1(2) - pos(k,2)
-      z = pos_ip1(3) - pos(k,3)
-      if ((x*x+y*y+z*z)<rcc2) then
-        EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
-      end if
-    end do
-  end do
-  EE1 = EE1 * qq1
+!   !
+!   ! Real Space
+!   EE1 = 0
+!   icelx = int(pos_ip1(1)/clx)+1
+!   icely = int(pos_ip1(2)/cly)+1
+!   icelz = int(pos_ip1(3)/clz)+1
+!   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+!   do i = 1, cell_near_list(ncel,28,1)
+!     icelx = cell_near_list(ncel,i,1)
+!     icely = cell_near_list(ncel,i,2)
+!     icelz = cell_near_list(ncel,i,3)   
+!     j = hoc_r(icelx,icely,icelz) 
+!     do while (j/=0) 
+!       k = charge(j)
+!       x = pos_ip1(1) - pos(k,1)
+!       y = pos_ip1(2) - pos(k,2)
+!       z = pos_ip1(3) - pos(k,3)
+!       if ((x*x+y*y+z*z)<rcc2) then
+!         EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!       end if
+!     end do
+!   end do
+!   EE1 = EE1 * qq1
 
-  EE2 = 0
-  icelx = int(pos_ip1i(1)/clx)+1
-  icely = int(pos_ip1i(2)/cly)+1
-  icelz = int(pos_ip1i(3)/clz)+1
-  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
-  do i = 1, cell_near_list(ncel,28,1)
-    icelx = cell_near_list(ncel,i,1)
-    icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
-    j = hoc_r(icelx,icely,icelz) 
-    do while (j/=0) 
-      k = charge(j)
-      x = pos_ip1i(1) - pos(k,1)
-      y = pos_ip1i(2) - pos(k,2)
-      z = pos_ip1i(3) - pos(k,3)
-      if ((x*x+y*y+z*z)<rcc2) then
-        EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
-      end if
-    end do
-  end do
-  EE2 = EE2 * qq1
-  DeltaE = DeltaE + EE1 + EE2
+!   EE2 = 0
+!   icelx = int(pos_ip1i(1)/clx)+1
+!   icely = int(pos_ip1i(2)/cly)+1
+!   icelz = int(pos_ip1i(3)/clz)+1
+!   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+!   do i = 1, cell_near_list(ncel,28,1)
+!     icelx = cell_near_list(ncel,i,1)
+!     icely = cell_near_list(ncel,i,2)
+!     icelz = cell_near_list(ncel,i,3)   
+!     j = hoc_r(icelx,icely,icelz) 
+!     do while (j/=0) 
+!       k = charge(j)
+!       x = pos_ip1i(1) - pos(k,1)
+!       y = pos_ip1i(2) - pos(k,2)
+!       z = pos_ip1i(3) - pos(k,3)
+!       if ((x*x+y*y+z*z)<rcc2) then
+!         EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!       end if
+!     end do
+!   end do
+!   EE2 = EE2 * qq1
+!   DeltaE = DeltaE + EE1 + EE2
 
-  !
-  !interaction of the added two particles
-  x = pos_ip1i(1) - pos_ip1(1)
-  y = pos_ip1i(2) - pos_ip1(2)
-  z = pos_ip1i(3) - pos_ip1(3)
-  x1 = fourier_x(x)
-  y1 = fourier_y(y)
-  z1 = fourier_z(z)
-  x = Periodic_x(x)
-  y = Periodic_y(y)
-  z = Periodic_z(z)
-  t = x1 + y1 + z1
-  DeltaE = DeltaE + qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
+!   !
+!   !interaction of the added two particles
+!   x = pos_ip1i(1) - pos_ip1(1)
+!   y = pos_ip1i(2) - pos_ip1(2)
+!   z = pos_ip1i(3) - pos_ip1(3)
+!   x1 = fourier_x(x)
+!   y1 = fourier_y(y)
+!   z1 = fourier_z(z)
+!   x = Periodic_x(x)
+!   y = Periodic_y(y)
+!   z = Periodic_z(z)
+!   t = x1 + y1 + z1
+!   DeltaE = DeltaE + qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
 
-  !
-  !modified term of slab geometry
-  dMz = pos_ip1i(4)*pos_ip1i(3) + pos_ip1(4)*pos_ip1(3)
-  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+!   !
+!   !modified term of slab geometry
+!   dMz = pos_ip1i(4)*pos_ip1i(3) + pos_ip1(4)*pos_ip1(3)
+!   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
 
-  !
-  !External field energy
-  DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
+!   !
+!   !External field energy
+!   DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
 
 end subroutine Delta_Energy_add
 
@@ -893,111 +929,111 @@ subroutine Delta_Energy_delete(DeltaE)
 
   DeltaE = 0
 
-  !
-  ! Fourier Space
-  EE1 = 0
-  EE2 = 0
-  qq1 = pos_ip0(4)
-  qq2 = pos_ip0i(4)
-  j = cell_list_q(Nq+1)
-  do while (j/=0)
-    k = charge(j)
-    if (k/=ip) then
-      x1 = pos_ip0(1) - pos(k,1)
-      y1 = pos_ip0(2) - pos(k,2)
-      z1 = pos_ip0(3) - pos(k,3)     
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE1 = EE1 + pos(k,4)*fourier_ij(t)
-    end if
-    if (k/=ip1) then
-      x1 = pos_ip1(1) - pos(k,1)
-      y1 = pos_ip1(2) - pos(k,2)
-      z1 = pos_ip1(3) - pos(k,3)
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE2 = EE2 + pos(k,4)*fourier_ij(t)
-    end if
-  end do
+!   !
+!   ! Fourier Space
+!   EE1 = 0
+!   EE2 = 0
+!   qq1 = pos_ip0(4)
+!   qq2 = pos_ip0i(4)
+!   j = cell_list_q(Nq+1)
+!   do while (j/=0)
+!     k = charge(j)
+!     if (k/=ip) then
+!       x1 = pos_ip0(1) - pos(k,1)
+!       y1 = pos_ip0(2) - pos(k,2)
+!       z1 = pos_ip0(3) - pos(k,3)     
+!       x1 = fourier_x(x1)
+!       y1 = fourier_y(y1)
+!       z1 = fourier_z(z1)
+!       t = x1 + y1 + z1
+!       EE1 = EE1 + pos(k,4)*fourier_ij(t)
+!     end if
+!     if (k/=ip1) then
+!       x1 = pos_ip1(1) - pos(k,1)
+!       y1 = pos_ip1(2) - pos(k,2)
+!       z1 = pos_ip1(3) - pos(k,3)
+!       x1 = fourier_x(x1)
+!       y1 = fourier_y(y1)
+!       z1 = fourier_z(z1)
+!       t = x1 + y1 + z1
+!       EE2 = EE2 + pos(k,4)*fourier_ij(t)
+!     end if
+!   end do
 
-  DeltaE = EE1*qq1 + EE2*qq2
+!   DeltaE = EE1*qq1 + EE2*qq2
 
-  !
-  ! Real Space
-  EE1 = 0
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
-  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
-  do i = 1, cell_near_list(ncel,28,1)
-    icelx = cell_near_list(ncel,i,1)
-    icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
-    j = hoc_r(icelx,icely,icelz) 
-    do while (j/=0) 
-      k = charge(j)
-      if (k/=ip) then
-        x = pos_ip1(1) - pos(k,1)
-        y = pos_ip1(2) - pos(k,2)
-        z = pos_ip1(3) - pos(k,3)
-        if ((x*x+y*y+z*z)<rcc2) then
-          EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
-        end if
-      end if
-    end do
-  end do
-  EE1 = EE1 * qq1
+!   !
+!   ! Real Space
+!   EE1 = 0
+!   icelx = int(pos_ip1(1)/clx)+1
+!   icely = int(pos_ip1(2)/cly)+1
+!   icelz = int(pos_ip1(3)/clz)+1
+!   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+!   do i = 1, cell_near_list(ncel,28,1)
+!     icelx = cell_near_list(ncel,i,1)
+!     icely = cell_near_list(ncel,i,2)
+!     icelz = cell_near_list(ncel,i,3)   
+!     j = hoc_r(icelx,icely,icelz) 
+!     do while (j/=0) 
+!       k = charge(j)
+!       if (k/=ip) then
+!         x = pos_ip1(1) - pos(k,1)
+!         y = pos_ip1(2) - pos(k,2)
+!         z = pos_ip1(3) - pos(k,3)
+!         if ((x*x+y*y+z*z)<rcc2) then
+!           EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!         end if
+!       end if
+!     end do
+!   end do
+!   EE1 = EE1 * qq1
 
-  EE2 = 0
-  icelx = int(pos_ip1i(1)/clx)+1
-  icely = int(pos_ip1i(2)/cly)+1
-  icelz = int(pos_ip1i(3)/clz)+1 
-  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
-  do i = 1, cell_near_list(ncel,28,1)
-    icelx = cell_near_list(ncel,i,1)
-    icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
-    j = hoc_r(icelx,icely,icelz) 
-    do while (j/=0) 
-      k = charge(j)
-      if (k/=ip1) then
-        x = pos_ip1i(1) - pos(k,1)
-        y = pos_ip1i(2) - pos(k,2)
-        z = pos_ip1i(3) - pos(k,3)
-        if ((x*x+y*y+z*z)<rcc2) then
-          EE2 = EE2 + pos_ip1i(3)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
-        end if
-      end if
-    end do
-  end do
-  EE2 = EE2 * qq1
-  DeltaE = DeltaE + EE1 + EE2
-  !
-  !interaction of the added two particles
-  x = pos_ip1i(1) - pos_ip1(1)
-  y = pos_ip1i(2) - pos_ip1(2)
-  z = pos_ip1i(3) - pos_ip1(3)
-  x1 = fourier_x(x)
-  y1 = fourier_y(y)
-  z1 = fourier_z(z)
-  x = Periodic_x(x)
-  y = Periodic_y(y)
-  z = Periodic_z(z)
-  t = x1 + y1 + z1
-  DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
-  !
-  !modified term of slab geometry
-  dMz = pos_ip0i(4)*pos_ip0i(3) + pos_ip0(4)*pos_ip0(3)
-  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
-  !
-  !External field energy
-  DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
+!   EE2 = 0
+!   icelx = int(pos_ip1i(1)/clx)+1
+!   icely = int(pos_ip1i(2)/cly)+1
+!   icelz = int(pos_ip1i(3)/clz)+1 
+!   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+!   do i = 1, cell_near_list(ncel,28,1)
+!     icelx = cell_near_list(ncel,i,1)
+!     icely = cell_near_list(ncel,i,2)
+!     icelz = cell_near_list(ncel,i,3)   
+!     j = hoc_r(icelx,icely,icelz) 
+!     do while (j/=0) 
+!       k = charge(j)
+!       if (k/=ip1) then
+!         x = pos_ip1i(1) - pos(k,1)
+!         y = pos_ip1i(2) - pos(k,2)
+!         z = pos_ip1i(3) - pos(k,3)
+!         if ((x*x+y*y+z*z)<rcc2) then
+!           EE2 = EE2 + pos_ip1i(3)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+!         end if
+!       end if
+!     end do
+!   end do
+!   EE2 = EE2 * qq1
+!   DeltaE = DeltaE + EE1 + EE2
+!   !
+!   !interaction of the added two particles
+!   x = pos_ip1i(1) - pos_ip1(1)
+!   y = pos_ip1i(2) - pos_ip1(2)
+!   z = pos_ip1i(3) - pos_ip1(3)
+!   x1 = fourier_x(x)
+!   y1 = fourier_y(y)
+!   z1 = fourier_z(z)
+!   x = Periodic_x(x)
+!   y = Periodic_y(y)
+!   z = Periodic_z(z)
+!   t = x1 + y1 + z1
+!   DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
+!   !
+!   !modified term of slab geometry
+!   dMz = pos_ip0i(4)*pos_ip0i(3) + pos_ip0(4)*pos_ip0(3)
+!   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+!   !
+!   !External field energy
+!   DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
 
-  DeltaE = -DeltaE
+!   DeltaE = -DeltaE
 
 end subroutine Delta_Energy_delete
 
