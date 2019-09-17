@@ -618,15 +618,15 @@ subroutine write_pos1(l)
   close(100)
 
   open(10,file='./start_time.txt')
-    write(10,*) 1
+    write(10,*) 0
     write(10,*) l
     call cpu_time(finished)
     total_time=total_time+finished-started
     call cpu_time(started)
     write(10,*) total_time
-    write(10,*) 'time:(minutes)', real(total_time/60)
-    write(10,*) 'time:(hours)', real(total_time/3600)
-    write(10,*) 'time:(days)', real(total_time/86400)
+    write(10,*) 'time:(minutes):', real(total_time/60)
+    write(10,*) 'time:(hours)  :', real(total_time/3600)
+    write(10,*) 'time:(days)   :', real(total_time/86400)
     write(10,*) 'Lx2           :', real(Lx2)
     write(10,*) 'Ly2           :', real(Ly2)
     write(10,*) 'Lz2           :', real(Lz2)

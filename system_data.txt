@@ -1,13 +1,13 @@
 400             ! Lz2
 2               ! Z_empty
-1D-2            ! sigmag
+5D-2            ! sigmag
 0.8333D0        ! Beta: 1/kT, T=298K
 -1              ! qq: charge of PE
 3               ! qqi: charge of salt ion
 0.1             ! ion_ratio
-2               ! arm: number of arm in star brushes
-10              ! Nma: number of monomers of each arm
-36               ! Nga: grafting number of star brushes
+4               ! arm: number of arm in star brushes
+45              ! Nma: number of monomers of each arm
+36              ! Nga: grafting number of star brushes
 3               ! man_s: Manning effect : every 'man' particle have one charge
 200000          ! StepNum0
 200000          ! StepNum:  steps of running

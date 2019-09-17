@@ -17,12 +17,6 @@ subroutine initialize_position
     call initialize_ions
   end if
 
-!   !
-!   !initialize chargen on PE
-!   do i=1, Nq_PE
-!     pos(charge(i),4) = qq                 
-!   end do
-
 end subroutine initialize_position
 
 
@@ -77,7 +71,7 @@ subroutine uniform_star_brushes
       monbd(base+1,1) = base + 2 - l    
       monbd(base+1,arm+1) = 1
       do k = 2, Nma + 1
-        pos(base+k, :) = pos(base+k-1,:) + bond_vector(1,1:3)
+        pos(base+k, 1:3) = pos(base+k-1,1:3) + bond_vector(1,1:3)
         bond_numb(base+k-l) = bond_vector(1,4)
         monbd(base+k,1) = base + k - l       
         monbd(base+k,2) = base + k + 1 - l 
@@ -86,11 +80,11 @@ subroutine uniform_star_brushes
       do m = 2, arm
         base1 = base + Nma + 1      
         base2 = base1 + (m-2) * Nma 
-        pos(base2+1, :) = pos(base1, :) + bond_vector(m-1,1:3)
+        pos(base2+1, 1:3) = pos(base1, 1:3) + bond_vector(m-1,1:3)
         if (pos(base2+1, 1)>Lx2) then
           pos(base2+1,1) = pos(base2+1,1)-Lx2
         end if
-        if (pos(base2+1, 2)>Ly) then
+        if (pos(base2+1, 2)>Ly2) then
           pos(base2+1,2) = pos(base2+1,2)-Ly2
         end if
         bond_numb(base2+1-l) = bond_vector(m,4)
@@ -101,10 +95,10 @@ subroutine uniform_star_brushes
         monbd(base2+1,arm+1) = 2
         do n = 2, Nma
           if ( m == 2 ) then
-            pos(base2+n,:) = pos(base2+n-1,:) + bond_vector(1,1:3)
+            pos(base2+n,1:3) = pos(base2+n-1,1:3) + bond_vector(1,1:3)
             bond_numb(base2+n-l) = bond_vector(1,4)
           else
-            pos(base2+n,:) = pos(base2+n-1,:) + bond_vector(6,1:3)
+            pos(base2+n,1:3) = pos(base2+n-1,1:3) + bond_vector(6,1:3)
             bond_numb(base2+n-l) = bond_vector(6,4)
           end if
           monbd(base2+n,1) = base2 + n - l                
@@ -113,7 +107,7 @@ subroutine uniform_star_brushes
         end do
         monbd(base2+Nma,2) = 0               
         monbd(base2+Nma,arm+1) = 1
-      end do   
+      end do 
     end do
   end do
 
@@ -238,9 +232,8 @@ subroutine error_analysis(n, EE)
 !   call energy_ewald_module(n, EE1)
 
   EE1=0
-
   call energy_lookup_table(EE2, real_time, fourier_time)
-
+  stop
   absolute_error = abs(EE2-EE1)
 
   relative_error = absolute_error / EE1

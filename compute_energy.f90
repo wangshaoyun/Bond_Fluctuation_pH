@@ -63,8 +63,17 @@ save
   !Periodic condition  
   integer, allocatable, dimension( : ), private :: periodic_y
   !
+  !Periodic condition  
+  integer, allocatable, dimension( : ), private :: fourier_x
+  !
+  !Periodic condition  
+  integer, allocatable, dimension( : ), private :: fourier_y
+  !
+  !Periodic condition  
+  integer, allocatable, dimension( : ), private :: fourier_z
+  !
   !Coulomb energy of i,j in fourier space
-  real,  allocatable, dimension(:,:,:), private :: fourier_ij 
+  real,  allocatable, dimension(:), private :: fourier_ij 
   !
   !Coulomb energy of i,j in real space
   real,  allocatable, dimension(:,:,:), private :: real_ij 
@@ -79,13 +88,13 @@ subroutine initialize_energy_parameter
   !read force parameters from file
   call read_force_parameters
   !
-  ! periodic condition array
-  call Periodic_array
-  !
   if ( qq /= 0 ) then
     !
     !pre-calculate arrays in fourier space
     call pre_calculate_fourier_space
+    !
+    ! periodic condition array
+    call Periodic_array
     !
     !pre-calculate arrays in real space
     call pre_calculate_real_space
@@ -110,6 +119,8 @@ subroutine initialize_energy_arrays
     call Initialize_real_cell_list
   end if
 
+  call write_energy_parameters
+
 end subroutine initialize_energy_arrays
 
 
@@ -127,6 +138,23 @@ subroutine read_force_parameters
 end subroutine read_force_parameters
 
 
+subroutine write_energy_parameters
+
+  write(*,*) '****************************************************************'
+  write(*,*) '*************************system_data****************************'
+  write(*,*) 'rcc           :', rcc
+  write(*,*) 'nclx          :', nclx
+  write(*,*) 'ncly          :', ncly
+  write(*,*) 'nclz          :', nclz
+  write(*,*) 'clx           :', clx
+  write(*,*) 'cly           :', cly
+  write(*,*) 'clz           :', clz
+  write(*,*) '****************************************************************'
+  write(*,*)
+  write(*,*)
+end subroutine write_energy_parameters
+
+
 subroutine Periodic_array
   use global_variables
   implicit none
@@ -134,8 +162,14 @@ subroutine Periodic_array
 
   allocate(periodic_x(-Lx2:Lx2))
   allocate(periodic_y(-Ly2:Ly2))
+  allocate(fourier_x(-Lx2:Lx2))
+  allocate(fourier_y(-Ly2:Ly2))
+  allocate(fourier_z(-Lz2:Lz2))
   Periodic_x = 0
   Periodic_y = 0
+  fourier_x = 0
+  fourier_y = 0
+  fourier_z = 0
 
   if (mod(Lx2,2) == 0) then
     do i = -Lx2, Lx2
@@ -143,6 +177,8 @@ subroutine Periodic_array
         periodic_x(i) = i + Lx2
       elseif (i>=Lx2/2) then
         periodic_x(i) = i - Lx2
+      else
+        periodic_x(i) = i
       end if
     end do
   else
@@ -151,6 +187,8 @@ subroutine Periodic_array
         periodic_x(i) = i + Lx2
       elseif (i>Lx2/2) then
         periodic_x(i) = i - Lx2
+      else
+        periodic_x(i) = i
       end if
     end do
   end if 
@@ -161,6 +199,8 @@ subroutine Periodic_array
         periodic_y(i) = i + Ly2
       elseif (i>=Ly2/2) then
         periodic_y(i) = i - Ly2
+      else
+        Periodic_y(i) = i
       end if
     end do
   else
@@ -169,15 +209,32 @@ subroutine Periodic_array
         periodic_y(i) = i + Ly2
       elseif (i>Ly2/2) then
         periodic_y(i) = i - Ly2
+      else
+        Periodic_y(i) = i
       end if
     end do
   end if 
 
-  open(100,file='periodic_xy.txt')
-    do i = -Ly2, Ly2
-      write(100,*) periodic_x(i),Periodic_y(i)
-    end do
-  close(100)
+  do i = -Lx2, Lx2
+    fourier_x(i) = Periodic_x(i) + K1_half + 1
+    fourier_x(i) = (fourier_x(i)-1)*Kmax2*Kmax3
+  end do
+
+  do i = -Ly2, Ly2
+    fourier_y(i) = Periodic_y(i) + K2_half + 1
+    fourier_y(i) = (fourier_y(i)-1)*Kmax3
+  end do
+
+  do i = -Lz2, Lz2
+    fourier_z(i) = i + K3_half + 1
+  end do
+
+
+!   open(100,file='./data/periodic_xy.txt')
+!     do i = -Ly2, Ly2
+!       write(100,*) i,periodic_x(i),Periodic_y(i)
+!     end do
+!   close(100)
 
 end subroutine Periodic_array
 
@@ -188,9 +245,9 @@ subroutine energy_lookup_table(EE, rt, ft)
   real*8, intent(out) :: EE
   real*8, intent(out) :: rt
   real*8, intent(out) :: ft
-  integer :: i, j, k, l, m, n, x, y, z
+  integer :: i, j, k, l, m, n, x1, y1, z1, x, y, z, t
   integer :: icelx, icely, icelz, ncel
-  real*8 :: st, fn
+  real*8 :: st, fn, EE1, EE2,rr(4)
 
   EE = 0
   !
@@ -209,45 +266,60 @@ subroutine energy_lookup_table(EE, rt, ft)
       k = hoc_r(icelx,icely,icelz)
       do while(k/=0)
         l = charge(k)
-        if (l/=i) then
-          x = pos(i,1) - pos(l,1)
-          y = pos(i,2) - pos(l,2)
-          z = pos(i,3) - pos(l,3)
+        if (l/=m) then
+          x = pos(m,1) - pos(l,1)
+          y = pos(m,2) - pos(l,2)
+          z = pos(m,3) - pos(l,3)
           x = periodic_x(x)
           y = periodic_y(y)
           if ((x*x+y*y+z*z)<rcc2) then
-            EE = EE + pos(i,4)*pos(l,4)*real_ij(x,y,z)
+            EE = EE + pos(m,4)*pos(l,4)*real_ij(x,y,z)
           end if
         end if
+        k = cell_list_r(k)
       end do
     end do
   end do
   call cpu_time(fn)
   rt = fn - st 
 
+  EE1 = EE
+  write(*,*) 'real energy', EE, rt
   !
   !fourier space
   call cpu_time(st)
+!   write(*,*) size(fourier_ij,1),size(fourier_ij,2),size(fourier_ij,3)
   do i = 1, Nq
+    m = charge(i)
+    EE2=0
+    x = pos(m,1)
+    y = pos(m,2)
+    z = pos(m,3)
     do j = 1, Nq
-      m = charge(i)
       n = charge(j)
       if (m/=n) then
-        x = pos(m,1) - pos(n,1)
-        y = pos(m,2) - pos(n,2)
-        z = pos(m,3) - pos(n,3)        
-        x = periodic_x(x)
-        y = periodic_y(y)
-        EE = EE + pos(m,4)*pos(n,4)*fourier_ij(x,y,z)
+        x1 = x - pos(n,1)
+        y1 = y - pos(n,2)
+        z1 = z - pos(n,3)    
+        x1 = fourier_x(x1)
+        y1 = fourier_y(y1)
+        z1 = fourier_z(z1)
+        t = x1 + y1 + z1
+        EE2 = EE2 + pos(n,4)*fourier_ij(t)
       end if
     end do
+    EE2= pos(m,4)*EE2
+    EE = EE + EE2
   end do
   call cpu_time(fn)
   ft = fn - st
+  write(*,*) 'fourier energy', EE-EE1,ft
+  write(*,*) 'coulomb energy', EE
   !
   !modified term of slab geometry
-  EE = EE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
-
+  EE = EE/2 + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
+  write(*,*) 'coulomb energy with modification', EE
+  stop
 end subroutine energy_lookup_table
 
 
@@ -255,11 +327,12 @@ subroutine pre_calculate_fourier_space
   use global_variables
   implicit none
   include "fftw3.f90"
-  integer :: i, j, k, p, q, r
+  integer :: i, j, k, p, q, r, t
   real*8 :: kx,ky,kz,krx,kry,krz,k2
   complex(kind=8) :: exp_x,exp_y,exp_z,test,a1,a2,a3
   complex(kind=8), allocatable, dimension(:,:,:) :: exp_k2
   complex(kind=8), allocatable, dimension(:,:,:) :: FT_exp_k2
+  real*8, allocatable,dimension(:,:,:) :: fourier_ij1
   integer ( kind = 8 ) plan_backward
   integer ( kind = 8 ) plan_forward
   integer ( kind = 8 ) plan
@@ -268,8 +341,8 @@ subroutine pre_calculate_fourier_space
 
   alpha = pi/2/tol
   alpha2 = alpha*alpha
-  rcc = 2*tol*tol/pi*2       !2*2.5*2.5/pi*2=7.96, lattice unit
-  rcc2 = rcc*rcc
+  rcc = 1.D0*floor(2*tol*tol/pi*2)       ! 2*2.5*2.5/pi*2=7.96, lattice unit
+  rcc2 = rcc*rcc                         ! rcc is dependent on tol only.
   write(*,*) 'rcc=',rcc
 
   Kmax1 = Lx2
@@ -301,8 +374,8 @@ subroutine pre_calculate_fourier_space
   !for the maxium situation sigmag=1e-3, (500,500,1200), it will need 9.6G RAM
   if (allocated(exp_k2)) deallocate( exp_k2 )
   if (allocated(FT_exp_k2)) deallocate( FT_exp_k2 )
-  allocate( exp_k2(1:Kmax1,1:Kmax2,1:Kmax3) )
-  allocate( FT_exp_k2(1:Kmax1,1:Kmax2,1:Kmax3) )
+  allocate( exp_k2(Kmax1,Kmax2,Kmax3) )
+  allocate( FT_exp_k2(Kmax1,Kmax2,Kmax3) )
 
 !   fij=0
 !   rr=(/-60,-60,-200/)
@@ -318,14 +391,14 @@ subroutine pre_calculate_fourier_space
         else
           exp_k2(i,j,k) = cmplx(exp(-k2/4/alpha2)/k2,0)
         end if
-        krx = kx*rr(1)
-        kry = ky*rr(2)
-        krz = kz*rr(3)
+!         krx = kx*rr(1)
+!         kry = ky*rr(2)
+!         krz = kz*rr(3)
 !         fij = fij + exp_k2(i,j,k)*cmplx(cos(krx+kry+krz),sin(krx+kry+krz))
       end do
     end do
   end do
-!   fij = (lb/beta*2*pi/(Lx*Ly*Lz*Z_empty))*fij
+!   fij = (lb/beta*4*pi/(Lx*Ly*Lz*Z_empty))*fij
 
   call dfftw_plan_dft_3d_ ( plan_forward, Kmax1, Kmax2, Kmax3, exp_k2, FT_exp_k2, FFTW_FORWARD, FFTW_Estimate ) 
 
@@ -335,8 +408,8 @@ subroutine pre_calculate_fourier_space
 
   deallocate(exp_k2)
 
-  if (allocated(fourier_ij)) deallocate( fourier_ij )
-  allocate( fourier_ij( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) ) )
+  if (allocated(fourier_ij1)) deallocate( fourier_ij1 )
+  allocate( fourier_ij1( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) ) )
 
   do i = 1, Kmax1
     do j = 1, Kmax2 
@@ -344,23 +417,40 @@ subroutine pre_calculate_fourier_space
         p=i-1
         q=j-1
         r=k-1
-        if ( i > Kmax1-K1_half-1 ) then
+        if ( p > Kmax1-K1_half-1 ) then
           p = p - Kmax1
         end if
-        if ( j > Kmax2-K2_half-1 ) then
+        if ( q > Kmax2-K2_half-1 ) then
           q = q - Kmax2
         end if
-        if ( k > Kmax3-K3_half-1 ) then
+        if ( r > Kmax3-K3_half-1 ) then
           r = r - Kmax3
         end if
-        fourier_ij(p,q,r) = real( ( exp_x**(-p)) * (exp_y**(-q)) &
-                            * (exp_z**(-r) ) *  FT_exp_k2(i,j,k) )
+        fourier_ij1(p,q,r)=real(exp_x**(-p)*exp_y**(-q)*exp_z**(-r)* &
+          FT_exp_k2(i,j,k))
       end do
     end do
   end do
 
-  fourier_ij = (lb/beta*2*pi/(Lx*Ly*Lz*Z_empty))*fourier_ij
   deallocate(FT_exp_k2)
+
+  fourier_ij1 = (lb/beta*4*pi/(Lx*Ly*Lz*Z_empty))*fourier_ij1
+
+  if (allocated(fourier_ij)) deallocate( fourier_ij )
+  allocate( fourier_ij(Kmax1*Kmax2*Kmax3) )  
+
+  do i = -K1_half,(Kmax1-K1_half-1)
+    do j = -K2_half,(Kmax2-K2_half-1)
+      do k = -K3_half,(Kmax3-K3_half-1)
+        p = i + K1_half + 1
+        q = j + K2_half + 1
+        r = k + K3_half + 1
+        t = (p-1)*Kmax1*Kmax2 + (q-1)*Kmax3 + r
+        fourier_ij(t) = fourier_ij1(i,j,k)
+      end do
+    end do
+  end do
+  deallocate(fourier_ij1)
 
 end subroutine pre_calculate_fourier_space
 
@@ -372,18 +462,13 @@ subroutine pre_calculate_real_space
   integer :: nnl, nn_half
   real*8 :: rr, x, y, z
 
-  nnl = floor(rcc)   ! lattice length
-  if ( mod(nnl,2) == 0 ) then
-    nn_half = nnl / 2
-  else
-    nn_half = (nn-1) / 2
-  end if 
+  nnl = nint(rcc)   ! cut off length, lattice unit
   if (allocated(real_ij)) deallocate(real_ij)
-  allocate( real_ij( -nn_half:nnl-nn_half-1, -nn_half:nnl-nn_half-1, -nn_half:nnl-nn_half-1 ) )
+  allocate( real_ij(-nnl:nnl, -nnl:nnl, -nnl:nnl) )
 
-  do i = -nn_half, nnl-nn_half-1
-    do j = -nn_half, nnl-nn_half-1
-      do k = -nn_half, nnl-nn_half-1
+  do i = -nnl, nnl
+    do j = -nnl, nnl
+      do k = -nnl, nnl
         x = i/2.D0                      !sigma unit
         y = j/2.D0
         z = k/2.D0
@@ -393,7 +478,7 @@ subroutine pre_calculate_real_space
     end do
   end do
 
-  real_ij = real_ij / 2 * lb / beta
+  real_ij = real_ij * lb / beta
 
 end subroutine pre_calculate_real_space
 
@@ -451,7 +536,7 @@ subroutine Initialize_cell_list_q
     inv_cell_list_q(Nq+1) = i
   end do
 
-!   open(100,file='cell_list_q.txt')
+!   open(100,file='./data/cell_list_q.txt')
 !     do i = 1, Nq + 1
 !       write(100,*) cell_list_q(i), inv_cell_list_q(i)
 !     end do
@@ -466,12 +551,12 @@ subroutine Initialize_real_cell_list
   integer :: i, j, k, l, m, n, p, q, r, x, y, z
   integer :: icelx, icely, icelz
 
-  nclx = int(Lx2/rcc)     !cell numbers in x direction
-  ncly = int(Ly2/rcc)
-  nclz = int(Lz2/rcc)
-  clx = 1.*Lx2/nclx       !cell length    
-  cly = 1.*Ly2/ncly
-  clz = 1.*Lz2/nclz
+  nclx = int(Lx2/(rcc+1))     !cell numbers in x direction
+  ncly = int(Ly2/(rcc+1))
+  nclz = int(Lz2/(rcc+1))
+  clx = 1.D0*Lx2/nclx         !cell length    
+  cly = 1.D0*Ly2/ncly
+  clz = 1.D0*Lz2/nclz
 
   !
   ! maxium situation, (125,125,100), 6.2Mb RAM is needed.
@@ -541,17 +626,17 @@ subroutine Initialize_real_cell_list
     end do
   end do
 
-!   open(100,file='cell_list_q.txt')
+!   open(100,file='./data/cell_list_r.txt')
 !     do i = 1, NN
-!       write(100,*) cell_list_q(i), inv_cell_list_q(i)
+!       write(100,*) i,cell_list_r(i), inv_cell_list_r(i)
 !     end do
 !   close(100)
 
-!   open(100,file='hoc_r.txt')
+!   open(100,file='./data/hoc_r.txt')
 !     do i = 1, nclx
 !       do j = 1, ncly
 !         do k = 1, nclz
-!          write(100,*) hoc_r(icelx,icely,icelz),inv_hoc_r(icelx,icely,icelz)
+!          write(100,*) i,j,k,hoc_r(i,j,k),inv_hoc_r(i,j,k)
 !         end do
 !       end do
 !     end do
@@ -564,7 +649,7 @@ subroutine Delta_Energy(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
-  integer :: i,j,k,x,y,z,icelx,icely,icelz,ncel
+  integer :: i,j,k,x,y,z,x1,y1,z1,t,icelx,icely,icelz,ncel
   real*8 :: EE1,EE2,rr,dMz
   real*8, dimension(3) :: rij
 
@@ -578,19 +663,23 @@ subroutine Delta_Energy(DeltaE)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-      x = pos_ip0(1) - pos(k,1)
-      y = pos_ip0(2) - pos(k,2)
-      z = pos_ip0(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
-      EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
+      x1 = pos_ip0(1) - pos(k,1)
+      y1 = pos_ip0(2) - pos(k,2)
+      z1 = pos_ip0(3) - pos(k,3)     
+      x1 = fourier_x(x1)
+      y1 = fourier_y(y1)
+      z1 = fourier_z(z1)
+      t = x1 + y1 + z1
+      EE1 = EE1 + pos(k,4)*fourier_ij(t)
 
-      x = pos_ip1(1) - pos(k,1)
-      y = pos_ip1(2) - pos(k,2)
-      z = pos_ip1(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
-      EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
+      x1 = pos_ip1(1) - pos(k,1)
+      y1 = pos_ip1(2) - pos(k,2)
+      z1 = pos_ip1(3) - pos(k,3)
+      x1 = fourier_x(x1)
+      y1 = fourier_y(y1)
+      z1 = fourier_z(z1)
+      t = x1 + y1 + z1
+      EE2 = EE2 + pos(k,4)*fourier_ij(t)
     end if
   end do
 
@@ -616,7 +705,7 @@ subroutine Delta_Energy(DeltaE)
         z = pos_ip0(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<rcc) then
+        if ((x*x+y*y+z*z)<=rcc2) then
           EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
         end if
       end if
@@ -642,7 +731,7 @@ subroutine Delta_Energy(DeltaE)
         z = pos_ip1(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<rcc) then
+        if ((x*x+y*y+z*z)<=rcc2) then
           EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
         end if
       end if
@@ -669,7 +758,7 @@ subroutine Delta_Energy_add(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
-  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icely,icelz,ncel
+  integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
   real*8 :: EE1,EE2,rr,dMz
   real*8, dimension(3) :: rij
 
@@ -684,19 +773,23 @@ subroutine Delta_Energy_add(DeltaE)
   j = cell_list_q(Nq+1)
   do while (j/=0)
     k = charge(j)
-    x = pos_ip1(1) - pos(k,1)
-    y = pos_ip1(2) - pos(k,2)
-    z = pos_ip1(3) - pos(k,3)
-    x = Periodic_x(x)
-    y = Periodic_y(y)
-    EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
+    x1 = pos_ip0(1) - pos(k,1)
+    y1 = pos_ip0(2) - pos(k,2)
+    z1 = pos_ip0(3) - pos(k,3)     
+    x1 = fourier_x(x1)
+    y1 = fourier_y(y1)
+    z1 = fourier_z(z1)
+    t = x1 + y1 + z1
+    EE1 = EE1 + pos(k,4)*fourier_ij(t)
 
-    x = pos_ip1i(1) - pos(k,1)
-    y = pos_ip1i(2) - pos(k,2)
-    z = pos_ip1i(3) - pos(k,3)
-    x = Periodic_x(x)
-    y = Periodic_y(y)
-    EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
+    x1 = pos_ip1(1) - pos(k,1)
+    y1 = pos_ip1(2) - pos(k,2)
+    z1 = pos_ip1(3) - pos(k,3)
+    x1 = fourier_x(x1)
+    y1 = fourier_y(y1)
+    z1 = fourier_z(z1)
+    t = x1 + y1 + z1
+    EE2 = EE2 + pos(k,4)*fourier_ij(t)
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
@@ -720,7 +813,7 @@ subroutine Delta_Energy_add(DeltaE)
       z = pos_ip1(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
-      if ((x*x+y*y+z*z)<rcc2) then
+      if ((x*x+y*y+z*z)<=rcc2) then
         EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
       end if
     end do
@@ -744,7 +837,7 @@ subroutine Delta_Energy_add(DeltaE)
       z = pos_ip1i(3) - pos(k,3)
       x = Periodic_x(x)
       y = Periodic_y(y)
-      if ((x*x+y*y+z*z)<rcc) then
+      if ((x*x+y*y+z*z)<=rcc2) then
         EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
       end if
     end do
@@ -757,9 +850,13 @@ subroutine Delta_Energy_add(DeltaE)
   x = pos_ip1i(1) - pos_ip1(1)
   y = pos_ip1i(2) - pos_ip1(2)
   z = pos_ip1i(3) - pos_ip1(3)
+  x1 = fourier_x(x)
+  y1 = fourier_y(y)
+  z1 = fourier_z(z)
   x = Periodic_x(x)
   y = Periodic_y(y)
-  DeltaE = DeltaE + qq1*qq2*(fourier_ij(x,y,z)+real_ij(x,y,z))
+  t = x1 + y1 + z1
+  DeltaE = DeltaE + qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
 
   !
   !modified term of slab geometry
@@ -777,7 +874,7 @@ subroutine Delta_Energy_delete(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
-  integer :: i,j,k,x,y,z,qq1,qq2,icelx,icely,icelz,ncel
+  integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
   real*8 :: EE1,EE2,rr,dMz
   real*8, dimension(3) :: rij
 
@@ -793,20 +890,24 @@ subroutine Delta_Energy_delete(DeltaE)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-      x = pos_ip1(1) - pos(k,1)
-      y = pos_ip1(2) - pos(k,2)
-      z = pos_ip1(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
-      EE1 = EE1 + pos(k,4)*fourier_ij(x,y,z)
+      x1 = pos_ip0(1) - pos(k,1)
+      y1 = pos_ip0(2) - pos(k,2)
+      z1 = pos_ip0(3) - pos(k,3)     
+      x1 = fourier_x(x1)
+      y1 = fourier_y(y1)
+      z1 = fourier_z(z1)
+      t = x1 + y1 + z1
+      EE1 = EE1 + pos(k,4)*fourier_ij(t)
     end if
     if (k/=ip1) then
-      x = pos_ip1i(1) - pos(k,1)
-      y = pos_ip1i(2) - pos(k,2)
-      z = pos_ip1i(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
-      EE2 = EE2 + pos(k,4)*fourier_ij(x,y,z)
+      x1 = pos_ip1(1) - pos(k,1)
+      y1 = pos_ip1(2) - pos(k,2)
+      z1 = pos_ip1(3) - pos(k,3)
+      x1 = fourier_x(x1)
+      y1 = fourier_y(y1)
+      z1 = fourier_z(z1)
+      t = x1 + y1 + z1
+      EE2 = EE2 + pos(k,4)*fourier_ij(t)
     end if
   end do
 
@@ -832,7 +933,7 @@ subroutine Delta_Energy_delete(DeltaE)
         z = pos_ip1(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<rcc2) then
+        if ((x*x+y*y+z*z)<=rcc2) then
           EE1 = EE1 + pos(k,4)*real_ij(x,y,z)
         end if
       end if
@@ -858,7 +959,7 @@ subroutine Delta_Energy_delete(DeltaE)
         z = pos_ip1i(3) - pos(k,3)
         x = Periodic_x(x)
         y = Periodic_y(y)
-        if ((x*x+y*y+z*z)<rcc2) then
+        if ((x*x+y*y+z*z)<=rcc2) then
           EE2 = EE2 + pos(k,4)*real_ij(x,y,z)
         end if
       end if
@@ -871,9 +972,13 @@ subroutine Delta_Energy_delete(DeltaE)
   x = pos_ip1i(1) - pos_ip1(1)
   y = pos_ip1i(2) - pos_ip1(2)
   z = pos_ip1i(3) - pos_ip1(3)
+  x1 = fourier_x(x)
+  y1 = fourier_y(y)
+  z1 = fourier_z(z)
   x = Periodic_x(x)
   y = Periodic_y(y)
-  DeltaE = DeltaE - qq1*qq2*(fourier_ij(x,y,z)+real_ij(x,y,z))
+  t = x1 + y1 + z1
+  DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
   !
   !modified term of slab geometry
   dMz = pos_ip0i(4)*pos_ip0i(3) + pos_ip0(4)*pos_ip0(3)
