@@ -1,5 +1,9 @@
 module initialize_update
 implicit none
+! compute_energy
+! Delta_energy
+! Delta_energy_add
+! Delta_energy_delete
 
 contains
 
@@ -235,6 +239,8 @@ subroutine error_analysis(n, EE)
   EE1=0
   call energy_lookup_table(EE2, real_time, fourier_time)
 
+  write(*,*) 'EE',EE2
+
   absolute_error = abs(EE2-EE1)
 
   relative_error = absolute_error / EE1
@@ -282,9 +288,8 @@ subroutine monte_carlo_move( EE, DeltaE )
 accept = 0
 call cpu_time(st)
   do i = 1, NN - Nga
-    if ( mod(i,DeltaStep) == 0 ) then
+    if ( mod(i,DeltaStep) == 0 .and. Nq/=0 ) then
       call choose_particle_pH
-!   write(*,*) EE, DeltaE,ip,pos(ip,4),i,1
       if (pos(ip,4)==0) then
         call add_particle(EE,DeltaE)
       else
@@ -292,15 +297,31 @@ call cpu_time(st)
       end if
     else
       call choose_particle
-!   write(*,*) EE, DeltaE,ip,pos(ip,4),i,0
-
       call new_position(EE,DeltaE)
     end if
   end do
 call cpu_time(fn)
-write(*,*) fn-st,1.*accept/(NN-Nga),EE,DeltaE
+! write(*,*) fn-st,1.*accept/(NN-Nga),EE,DeltaE
 
 end subroutine monte_carlo_move
+
+
+subroutine choose_particle
+  use global_variables
+  implicit none
+  real*8 :: rnd
+
+  call random_number(rnd)
+  ip = floor(rnd*NN) + 1
+
+  !
+  !The monomer anchored on the plate can't move, so we need to choose again.
+  do while( mod(ip,Ns) == 1 .and. ip <= Npe )
+    call random_number(rnd)
+    ip = int(rnd*NN) + 1
+  end do
+
+end subroutine choose_particle
 
 
 subroutine choose_particle_pH
@@ -342,12 +363,6 @@ subroutine add_particle(EE,DeltaE)
   pos_ip1 = pos_ip0                  !new polymer
   pos_ip1(4) = qq
 
-!   write(*,*) step,ip,pos(ip,4)
-!   if(pos(ip,4)/=0) then
-!     call Delta_Energy_add(DeltaE)
-!     write(*,*) DeltaE,pos(ip,4)
-!     stop
-!   end if
   !
   !judge the excluded volume condition
   xi = pos_ip1i(1)
@@ -408,10 +423,10 @@ subroutine delete_particle(EE, DeltaE)
 
   U_prot = log(10.D0)/beta*pH_pKa !+: add, -:delete
 
-  pos_ip0 = pos(ip,:)           !polymer
+  pos_ip0 = pos(ip,:)             !polymer
   pos_ip1 = pos_ip0
   pos_ip1(4) = 0
-  pos_ip0i = pos(ip1,:)         !ions
+  pos_ip0i = pos(ip1,:)           !ions
   pos_ip1i = pos_ip0i
   pos_ip1i(4) = 0
   xi = pos_ip0i(1)
@@ -458,24 +473,6 @@ subroutine delete_particle(EE, DeltaE)
 end subroutine delete_particle
 
 
-subroutine choose_particle
-  use global_variables
-  implicit none
-  real*8 :: rnd
-
-  call random_number(rnd)
-  ip = floor(rnd*NN) + 1
-
-  !
-  !The monomer anchored on the plate can't move, so we need to choose again.
-  do while( mod(ip,Ns) == 1 .and. ip <= Npe )
-    call random_number(rnd)
-    ip = int(rnd*NN) + 1
-  end do
-
-end subroutine choose_particle
-
-
 subroutine new_position(EE, DeltaE)
   use global_variables
   use compute_energy
@@ -501,13 +498,6 @@ subroutine new_position(EE, DeltaE)
   ix = pos_ip0(1)
   iy = pos_ip0(2)
   iz = pos_ip0(3)
-
-!   write(*,*) ip,pos(ip,4)
-!   if(pos(ip,4)/=0) then
-!     call Delta_Energy(DeltaE)
-!     write(*,*) DeltaE,pos(ip,4)
-!     stop
-!   end if
 
   test = .false.
   if ( ip <= Npe ) then

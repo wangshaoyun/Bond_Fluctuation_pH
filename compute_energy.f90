@@ -164,14 +164,21 @@ subroutine Periodic_array
   implicit none
   integer :: i
 
+  if(allocated(periodic_x)) deallocate(Periodic_x)
   allocate(periodic_x(-Lx2:Lx2))
+  if(allocated(periodic_y)) deallocate(Periodic_y)
   allocate(periodic_y(-Ly2:Ly2))
+  if(allocated(periodic_z)) deallocate(Periodic_z)
   allocate(periodic_z(-Lz2:Lz2))
+  if(allocated(fourier_x)) deallocate(fourier_x)
   allocate(fourier_x(-Lx2:Lx2))
+  if(allocated(fourier_y)) deallocate(fourier_y)
   allocate(fourier_y(-Ly2:Ly2))
+  if(allocated(fourier_z)) deallocate(fourier_z)
   allocate(fourier_z(-Lz2:Lz2))
   Periodic_x = 0
   Periodic_y = 0
+  periodic_z = 0
   fourier_x = 0
   fourier_y = 0
   fourier_z = 0
@@ -253,11 +260,17 @@ subroutine Periodic_array
   end do
 
 
-!   open(100,file='./data/periodic_xy.txt')
-!     do i = -Ly2, Ly2
-!       write(100,*) i,periodic_x(i),Periodic_y(i)
-!     end do
-!   close(100)
+  open(120,file='./data/periodic_xy.txt')
+    do i = -Lx2, Lx2
+      write(120,*) i,periodic_x(i),Periodic_y(i),fourier_x(i),fourier_y(i)
+    end do
+  close(120)
+
+  open(121,file='./data/periodic_z.txt')
+    do i = -Lz2, Lz2
+      write(121,*) i,periodic_z(i),fourier_z(i)
+    end do
+  close(121)
 
 end subroutine Periodic_array
 
@@ -279,9 +292,9 @@ subroutine energy_lookup_table(EE, rt, ft)
   call cpu_time(st)
   do i = 1, Nq
     m = charge(i)
-    icelx = int(pos(m,1)/clx)+1
-    icely = int(pos(m,2)/cly)+1
-    icelz = int(pos(m,3)/clz)+1
+    icelx = int((pos(m,1)-1)/clx)+1
+    icely = int((pos(m,2)-1)/cly)+1
+    icelz = int((pos(m,3)-1)/clz)+1
     ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
     do j = 1, cell_near_list(ncel,28,1)
       icelx = cell_near_list(ncel,j,1)
@@ -478,7 +491,7 @@ subroutine pre_calculate_real_space
   integer :: nnl, nn_half
   real*8 :: rr, x, y, z
 
-  nnl = nint(rcc)   ! cut off length, lattice unit
+  nnl = nint(rcc+1)    ! cut off length, lattice unit
   if (allocated(real_ij)) deallocate(real_ij)
   allocate( real_ij(0:nnl, 0:nnl, 0:nnl) )
 
@@ -506,7 +519,9 @@ subroutine Initialize_Charge
   integer :: i, j
 
   Mz = 0
+  if (allocated(charge)) deallocate(charge)
   allocate(charge(Nq))
+  if (allocated(inv_charge)) deallocate(inv_charge)
   allocate(inv_charge(NN))
 
   j = 0
@@ -536,7 +551,9 @@ subroutine Initialize_cell_list_q
   implicit none
   integer :: i, j, k
 
+  if (allocated(cell_list_q)) deallocate(cell_list_q)
   allocate(cell_list_q(Nq+1))     ! the last one is head of the list
+  if (allocated(inv_cell_list_q)) deallocate(inv_cell_list_q)
   allocate(inv_cell_list_q(Nq+1)) ! the last one is the head of the list
 
   !assume initial state, all particles are charged.
@@ -576,30 +593,34 @@ subroutine Initialize_real_cell_list
 
   !
   ! maxium situation, (125,125,100), 6.2Mb RAM is needed.
+  if (allocated(hoc_r)) deallocate(hoc_r)
   allocate(hoc_r(nclx,ncly,nclz))
+  if (allocated(inv_hoc_r)) deallocate(inv_hoc_r)
   allocate(inv_hoc_r(nclx,ncly,nclz))
   hoc_r = 0
   inv_hoc_r = 0
 
+  if (allocated(cell_list_r)) deallocate(cell_list_r)
   allocate(cell_list_r(Nq))
+  if (allocated(inv_cell_list_r)) deallocate(inv_cell_list_r)
   allocate(inv_cell_list_r(Nq))
   cell_list_r = 0
   inv_cell_list_r = 0
 
   do i = 1, Nq
     j = charge(i)
-    icelx = int(pos(j,1)/clx) + 1
-    icely = int(pos(j,2)/cly) + 1
-    icelz = int(pos(j,3)/clz) + 1
+    icelx = int((pos(j,1)-1)/clx) + 1
+    icely = int((pos(j,2)-1)/cly) + 1
+    icelz = int((pos(j,3)-1)/clz) + 1
     cell_list_r(i) = hoc_r(icelx,icely,icelz)
     hoc_r(icelx,icely,icelz) = i
   end do
 
   do i = Nq, 1, -1
     j = charge(i)
-    icelx = int(pos(j,1)/clx) + 1
-    icely = int(pos(j,2)/cly) + 1
-    icelz = int(pos(j,3)/clz) + 1
+    icelx = int((pos(j,1)-1)/clx) + 1
+    icely = int((pos(j,2)-1)/cly) + 1
+    icelz = int((pos(j,3)-1)/clz) + 1
     inv_cell_list_r(i) = inv_hoc_r(icelx,icely,icelz)
     inv_hoc_r(icelx,icely,icelz) = i
   end do
@@ -686,17 +707,12 @@ subroutine Delta_Energy(DeltaE)
             fourier_x( pos_ip0(1) - pos(k,1) ) + &
             fourier_y( pos_ip0(2) - pos(k,2) ) + &
             fourier_z( pos_ip0(3) - pos(k,3) ) )
-
       EE2 = EE2 + pos(k,4)*fourier_ij(  &
             fourier_x( pos_ip1(1) - pos(k,1) ) + &
             fourier_y( pos_ip1(2) - pos(k,2) ) + &
             fourier_z( pos_ip1(3) - pos(k,3) ) )
     end if
     j = cell_list_q(j)
-    if ((j==cell_list_q(j) .and. j/=0).or.abs(EE1+EE2)>1e10) then
-      write(*,*) j,ip,cell_list_q(j),'q'
-      stop
-    end if
   end do
 
   DeltaE = pos_ip1(4) * (EE2-EE1)
@@ -704,9 +720,9 @@ subroutine Delta_Energy(DeltaE)
   !
   ! Real Space
   EE1 = 0
-  icelx = int(pos_ip0(1)/clx)+1
-  icely = int(pos_ip0(2)/cly)+1
-  icelz = int(pos_ip0(3)/clz)+1
+  icelx = int((pos_ip0(1)-1)/clx)+1
+  icely = int((pos_ip0(2)-1)/cly)+1
+  icelz = int((pos_ip0(3)-1)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -719,24 +735,22 @@ subroutine Delta_Energy(DeltaE)
         x = pos_ip0(1) - pos(k,1)
         y = pos_ip0(2) - pos(k,2)
         z = pos_ip0(3) - pos(k,3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
           EE1=EE1+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
       j = cell_list_r(j)
-      if ((j==cell_list_r(j) .and. j/=0).or.abs(EE1)>1e10) then
-        write(*,*) 
-        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
-        stop
-      end if
     end do
   end do
   EE1 = EE1 * pos_ip1(4)
 
   EE2 = 0
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -749,16 +763,14 @@ subroutine Delta_Energy(DeltaE)
         x = pos_ip1(1) - pos(k,1)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
           EE2=EE2+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
       j = cell_list_r(j)
-      if ((j==cell_list_r(j) .and. j/=0).or.abs(EE2)>1e10) then
-        write(*,*) 
-        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
-        stop
-      end if
     end do
   end do
   EE2 = EE2 * pos_ip1(4)
@@ -772,11 +784,6 @@ subroutine Delta_Energy(DeltaE)
   !
   ! External field energy
   DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
-
-  if (abs(DeltaE)>1e10) then
-    write(*,*) '777'
-    stop
-  end if
 
 end subroutine Delta_Energy
 
@@ -804,16 +811,11 @@ subroutine Delta_Energy_add(DeltaE)
           fourier_x( pos_ip0(1) - pos(k,1) ) + &
           fourier_y( pos_ip0(2) - pos(k,2) ) + &
           fourier_z( pos_ip0(3) - pos(k,3) ) )
-
     EE2 = EE2 + pos(k,4)*fourier_ij( &
           fourier_x( pos_ip1(1) - pos(k,1) ) + &
           fourier_y( pos_ip1(2) - pos(k,2) ) + &
           fourier_z( pos_ip1(3) - pos(k,3) ) )
     j = cell_list_q(j)
-    if ((j==cell_list_q(j) .and. j/=0).or.(EE1+EE2)<-1e10) then
-      write(*,*) j,ip,cell_list_q(j),'q'
-      stop
-    end if
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
@@ -821,9 +823,9 @@ subroutine Delta_Energy_add(DeltaE)
   !
   ! Real Space
   EE1 = 0
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -835,22 +837,21 @@ subroutine Delta_Energy_add(DeltaE)
       x = pos_ip1(1) - pos(k,1)
       y = pos_ip1(2) - pos(k,2)
       z = pos_ip1(3) - pos(k,3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      z = Periodic_z(z)
       if ((x*x+y*y+z*z)<rcc2) then
         EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
       j = cell_list_r(j)
     end do
-    if ((j==cell_list_r(j) .and. j/=0).or.abs(EE1)>1e10) then
-      write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
-      stop
-    end if
   end do
   EE1 = EE1 * qq1
 
   EE2 = 0
-  icelx = int(pos_ip1i(1)/clx)+1
-  icely = int(pos_ip1i(2)/cly)+1
-  icelz = int(pos_ip1i(3)/clz)+1
+  icelx = int((pos_ip1i(1)-1)/clx)+1
+  icely = int((pos_ip1i(2)-1)/cly)+1
+  icelz = int((pos_ip1i(3)-1)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -862,15 +863,14 @@ subroutine Delta_Energy_add(DeltaE)
       x = pos_ip1i(1) - pos(k,1)
       y = pos_ip1i(2) - pos(k,2)
       z = pos_ip1i(3) - pos(k,3)
+      x = Periodic_x(x)
+      y = Periodic_y(y)
+      z = Periodic_z(z)
       if ((x*x+y*y+z*z)<rcc2) then
         EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
       j = cell_list_r(j)
     end do
-    if ((j==cell_list_r(j) .and. j/=0).or.abs(EE2)>1e10) then
-      write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
-      stop
-    end if
   end do
   EE2 = EE2 * qq1
   DeltaE = DeltaE + EE1 + EE2
@@ -887,8 +887,10 @@ subroutine Delta_Energy_add(DeltaE)
   y = Periodic_y(y)
   z = Periodic_z(z)
   t = x1 + y1 + z1
-  DeltaE = DeltaE + qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
-
+  DeltaE = DeltaE - qq1*qq2*fourier_ij(t)
+  if (x*x+y*y+z*z<rcc2) then
+    DeltaE = DeltaE - qq1*qq2*real_ij(x,y,z)
+  end if
   !
   !modified term of slab geometry
   dMz = pos_ip1i(4)*pos_ip1i(3)/2.D0 + pos_ip1(4)*pos_ip1(3)/2.D0
@@ -898,10 +900,6 @@ subroutine Delta_Energy_add(DeltaE)
   !External field energy
   DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
 
-  if (abs(DeltaE)>1e10) then
-    write(*,*) '897'
-    stop
-  end if
 
 end subroutine Delta_Energy_add
 
@@ -937,23 +935,19 @@ subroutine Delta_Energy_delete(DeltaE)
             fourier_z( pos_ip1i(3) - pos(k,3) ) )
     end if
     j = cell_list_q(j)
-    if (j==cell_list_q(j) .and. j/=0) then
-      write(*,*) j,ip,cell_list_q(j),'q'
-      stop
-    end if
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
- if (abs(DeltaE)>1e10) then
-    write(*,*) '948'
+  if (abs(DeltaE)>1e10) then
+    write(*,*) 'foureier'
     stop
   end if
   !
   ! Real Space
   EE1 = 0
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -966,26 +960,22 @@ subroutine Delta_Energy_delete(DeltaE)
         x = pos_ip1(1) - pos(k,1)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
           EE1=EE1+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
       j = cell_list_r(j)
-      if ((j==cell_list_r(j) .and. j/=0) .or. abs(EE1)>1e10) then
-        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
-        stop
-      end if
     end do
   end do
   EE1 = EE1 * qq1
- if (abs(EE1)>1e10) then
-    write(*,*) '1978'
-    stop
-  end if
+
   EE2 = 0
-  icelx = int(pos_ip1i(1)/clx)+1
-  icely = int(pos_ip1i(2)/cly)+1
-  icelz = int(pos_ip1i(3)/clz)+1 
+  icelx = int((pos_ip1i(1)-1)/clx)+1
+  icely = int((pos_ip1i(2)-1)/cly)+1
+  icelz = int((pos_ip1i(3)-1)/clz)+1 
   ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
@@ -998,21 +988,20 @@ subroutine Delta_Energy_delete(DeltaE)
         x = pos_ip1i(1) - pos(k,1)
         y = pos_ip1i(2) - pos(k,2)
         z = pos_ip1i(3) - pos(k,3)
+        x = Periodic_x(x)
+        y = Periodic_y(y)
+        z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
           EE2=EE2+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
       j = cell_list_r(j)
-      if ((j==cell_list_r(j) .and. j/=0).or. abs(EE2)>1e10) then
-        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz,EE2
-        stop
-      end if
     end do
   end do
   EE2 = EE2 * qq1
   DeltaE = DeltaE + EE1 + EE2
-  if (abs(EE2)>1e10) then
-    write(*,*) '1009'
+  if (abs(DeltaE)>1e10) then
+    write(*,*) 'real'
     stop
   end if
   !
@@ -1027,18 +1016,30 @@ subroutine Delta_Energy_delete(DeltaE)
   y = Periodic_y(y)
   z = Periodic_z(z)
   t = x1 + y1 + z1
-  DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
+  DeltaE = DeltaE - qq1*qq2*fourier_ij(t)
+  if (x*x+y*y+z*z<rcc2) then
+    DeltaE = DeltaE - qq1*qq2*real_ij(x,y,z)
+  end if 
   if (abs(DeltaE)>1e10) then
-    write(*,*) '1031',x,y,z,t,x1,y1,z1
+    write(*,*) 'inter',x,y,z,x1,y1,z1,pos_ip1i(1:3) - pos_ip1(1:3)
+    write(*,*) fourier_ij(t),real_ij(x,y,z)
     stop
   end if
   !
   !modified term of slab geometry
   dMz = pos_ip0i(4)*pos_ip0i(3)/2.D0 + pos_ip0(4)*pos_ip0(3)/2.D0
   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+  if (abs(DeltaE)>1e10) then
+    write(*,*) 'slab'
+    stop
+  end if
   !
   !External field energy
   DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
+  if (abs(DeltaE)>1e10) then
+    write(*,*) 'external'
+    stop
+  end if
 
   DeltaE = -DeltaE
 
@@ -1050,14 +1051,14 @@ subroutine update_real_cell_list
   implicit none
   integer :: icelx,icely,icelz
 
-  icelx = int(pos_ip0(1)/clx)+1
-  icely = int(pos_ip0(2)/cly)+1
-  icelz = int(pos_ip0(3)/clz)+1
+  icelx = int((pos_ip0(1)-1)/clx)+1
+  icely = int((pos_ip0(2)-1)/cly)+1
+  icelz = int((pos_ip0(3)-1)/clz)+1
   call update_real_cell_list_delete(ip,icelx,icely,icelz)
 
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
   call update_real_cell_list_add(ip,icelx,icely,icelz)
 
   Mz = Mz + dMz
@@ -1070,20 +1071,20 @@ subroutine update_cell_list_pH_add
   implicit none
   integer :: icelx,icely,icelz
 
-  icelx = int(pos_ip1(1)/clx)+1
-  icely = int(pos_ip1(2)/cly)+1
-  icelz = int(pos_ip1(3)/clz)+1
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
   call update_real_cell_list_add(ip,icelx,icely,icelz)
   call update_charge_cell_list_add(ip)
 
-  icelx = int(pos_ip1i(1)/clx)+1
-  icely = int(pos_ip1i(2)/cly)+1
-  icelz = int(pos_ip1i(3)/clz)+1
+  icelx = int((pos_ip1i(1)-1)/clx)+1
+  icely = int((pos_ip1i(2)-1)/cly)+1
+  icelz = int((pos_ip1i(3)-1)/clz)+1
   call update_real_cell_list_add(ip1,icelx,icely,icelz)
   call update_charge_cell_list_add(ip1)
 
   Mz = Mz + dMz
-  
+
 end subroutine update_cell_list_pH_add
 
 
@@ -1092,15 +1093,15 @@ subroutine update_cell_list_pH_delete
   implicit none
   integer :: icelx,icely,icelz
 
-  icelx = int(pos_ip0(1)/clx)+1
-  icely = int(pos_ip0(2)/cly)+1
-  icelz = int(pos_ip0(3)/clz)+1
+  icelx = int((pos_ip0(1)-1)/clx)+1
+  icely = int((pos_ip0(2)-1)/cly)+1
+  icelz = int((pos_ip0(3)-1)/clz)+1
   call update_real_cell_list_delete(ip,icelx,icely,icelz)
   call update_charge_cell_list_delete(ip)
 
-  icelx = int(pos_ip0i(1)/clx)+1
-  icely = int(pos_ip0i(2)/cly)+1
-  icelz = int(pos_ip0i(3)/clz)+1 
+  icelx = int((pos_ip0i(1)-1)/clx)+1
+  icely = int((pos_ip0i(2)-1)/cly)+1
+  icelz = int((pos_ip0i(3)-1)/clz)+1 
   call update_real_cell_list_delete(ip1,icelx,icely,icelz)
   call update_charge_cell_list_delete(ip1)
 
@@ -1178,7 +1179,6 @@ subroutine update_real_cell_list_delete(iq,icelx,icely,icelz)
       stop
     end if
   end do
-
 
 end subroutine update_real_cell_list_delete
 
