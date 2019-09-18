@@ -27,15 +27,15 @@ implicit none
     !
     !initialize position  
     call initialize_position
+    call write_pos
+    call write_pos1(i)
+    call write_hist    
     !
     !initialize energy array related to pos array
     call initialize_energy_arrays
-    call write_pos
-    call write_pos1(i)
     !
     !error analysis
     call error_analysis(0,EE)
-    call write_hist    
   else if (restart_or_continue /= 0) then
     !
     !read position and histogram data
@@ -47,6 +47,7 @@ implicit none
     !error analysis
     call error_analysis(0,EE)
   end if
+
   !##############preheating##############!
   if ( i <= StepNum0 ) then
     do step=i, StepNum0

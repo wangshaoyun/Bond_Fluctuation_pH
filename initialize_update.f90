@@ -6,6 +6,7 @@ contains
 subroutine initialize_position
   use global_variables
   implicit none
+  integer :: i
 
   !
   !Graft star brushes, the arms are all vertical to the plate.
@@ -233,7 +234,7 @@ subroutine error_analysis(n, EE)
 
   EE1=0
   call energy_lookup_table(EE2, real_time, fourier_time)
-  stop
+
   absolute_error = abs(EE2-EE1)
 
   relative_error = absolute_error / EE1
@@ -280,6 +281,7 @@ subroutine monte_carlo_move( EE, DeltaE )
   do i = 1, NN - Nga
     if ( mod(i,DeltaStep) == 0 ) then
       call choose_particle_pH
+  write(*,*) EE, DeltaE,ip,pos(ip,4),i,1
       if (pos(ip,4)==0) then
         call add_particle(EE,DeltaE)
       else
@@ -287,9 +289,12 @@ subroutine monte_carlo_move( EE, DeltaE )
       end if
     else
       call choose_particle
+  write(*,*) EE, DeltaE,ip,pos(ip,4),i,0
+
       call new_position(EE,DeltaE)
     end if
   end do
+
 
 end subroutine monte_carlo_move
 
@@ -320,18 +325,25 @@ subroutine add_particle(EE,DeltaE)
 
   U_prot = log(10.D0)/beta*pH_pKa !+: add, -:delete
 
-  pos_ip0 = pos(ip,:)
-  pos_ip0i = pos(ip1,:)
+  pos_ip0 = pos(ip,:)         !old polymer
+  pos_ip0i = pos(ip1,:)       !old ions
 
   !
   !new position
   call random_number(rnd)
-  pos_ip1i(1) = floor(rnd(1)*Lx2)+1
+  pos_ip1i(1) = floor(rnd(1)*Lx2)+1  !new ions
   pos_ip1i(2) = floor(rnd(2)*Ly2)+1
   pos_ip1i(3) = floor(rnd(3)*Lz2)+1
   pos_ip1i(4) = -qq/abs(qq)
-  pos_ip1 = pos_ip0
+  pos_ip1 = pos_ip0                  !new polymer
   pos_ip1(4) = qq
+
+!   write(*,*) step,ip,pos(ip,4)
+!   if(pos(ip,4)/=0) then
+!     call Delta_Energy_add(DeltaE)
+!     write(*,*) DeltaE,pos(ip,4)
+!     stop
+!   end if
   !
   !judge the excluded volume condition
   xi = pos_ip1i(1)
@@ -392,10 +404,10 @@ subroutine delete_particle(EE, DeltaE)
 
   U_prot = log(10.D0)/beta*pH_pKa !+: add, -:delete
 
-  pos_ip0 = pos(ip,:)
+  pos_ip0 = pos(ip,:)           !polymer
   pos_ip1 = pos_ip0
   pos_ip1(4) = 0
-  pos_ip0i = pos(ip1,:)
+  pos_ip0i = pos(ip1,:)         !ions
   pos_ip1i = pos_ip0i
   pos_ip1i(4) = 0
   xi = pos_ip0i(1)
@@ -404,6 +416,7 @@ subroutine delete_particle(EE, DeltaE)
   xp = ipx(xi)
   yp = ipy(yi)
   zp = ipz(zi)
+
   call Delta_Energy_delete(DeltaE)
   if ((DeltaE-U_prot)<0) then
     latt(xi,yi,zi) = 0
@@ -475,13 +488,22 @@ subroutine new_position(EE, DeltaE)
 
   call random_number(rnd)
   dir = floor(6*rnd)+1
+
   pos_ip0 = pos(ip,:)
   pos_ip1(1:3) = pos_ip0(1:3) + new_direction(dir,:)
   pos_ip1(4)   = pos_ip0(4)
   call periodic_condition( pos_ip1(1:2) )
+
   ix = pos_ip0(1)
   iy = pos_ip0(2)
   iz = pos_ip0(3)
+
+!   write(*,*) ip,pos(ip,4)
+!   if(pos(ip,4)/=0) then
+!     call Delta_Energy(DeltaE)
+!     write(*,*) DeltaE,pos(ip,4)
+!     stop
+!   end if
 
   test = .false.
   if ( ip <= Npe ) then
@@ -510,8 +532,12 @@ subroutine new_position(EE, DeltaE)
       testlat = latt(xp2,iy,iz)  + latt(xp2,yp1,iz) + &
                 latt(xp2,iy,zp1) + latt(xp2,yp1,zp1)
       if( testlat == 0 ) then
-        call Delta_Energy(DeltaE)
-        if ( DeltaE < 0 ) then
+        if (pos_ip1(4)/=0) then
+          call Delta_Energy(DeltaE)
+        else
+          DeltaE = 0
+        end if
+        if ( DeltaE <= 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
           if ( ip <= Npe ) then
@@ -527,7 +553,9 @@ subroutine new_position(EE, DeltaE)
           latt(ix,yp1,iz)   = 0 
           latt(ix,iy,zp1)   = 0 
           latt(ix,yp1,zp1)  = 0 
-          call update_real_cell_list
+          if (pos_ip1(4)/=0) then
+            call update_real_cell_list
+          end if
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -546,7 +574,9 @@ subroutine new_position(EE, DeltaE)
             latt(ix,yp1,iz)   = 0 
             latt(ix,iy,zp1)   = 0 
             latt(ix,yp1,zp1)  = 0 
-            call update_real_cell_list
+            if (pos_ip1(4)/=0) then
+              call update_real_cell_list
+            end if
           end if
         end if
       end if
@@ -558,8 +588,12 @@ subroutine new_position(EE, DeltaE)
       testlat = latt(xm1,iy,iz)  + latt(xm1,yp1,iz) + &
          &      latt(xm1,iy,zp1) + latt(xm1,yp1,zp1)
       if( testlat == 0 ) then
-        call Delta_Energy(DeltaE)
-        if ( DeltaE < 0 ) then
+        if (pos_ip1(4)/=0) then
+          call Delta_Energy(DeltaE)
+        else
+          DeltaE = 0
+        end if
+        if ( DeltaE <= 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
           if ( ip <= Npe ) then
@@ -575,7 +609,9 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,yp1,iz)  = 0 
           latt(xp1,iy,zp1)  = 0
           latt(xp1,yp1,zp1) = 0 
-          call update_real_cell_list
+          if (pos_ip1(4)/=0) then
+            call update_real_cell_list
+          end if
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -594,7 +630,9 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,yp1,iz)  = 0 
             latt(xp1,iy,zp1)  = 0 
             latt(xp1,yp1,zp1) = 0
-            call update_real_cell_list
+            if (pos_ip1(4)/=0) then
+              call update_real_cell_list
+            end if
           end if
         end if
       end if
@@ -605,7 +643,11 @@ subroutine new_position(EE, DeltaE)
       testlat = latt(ix,yp2,iz)  + latt(xp1,yp2,iz) + &
         &       latt(ix,yp2,zp1) + latt(xp1,yp2,zp1)
       if( testlat == 0 ) then
-        call Delta_Energy(DeltaE)
+        if (pos_ip1(4)/=0) then
+          call Delta_Energy(DeltaE)
+        else
+          DeltaE = 0
+        end if
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
@@ -622,7 +664,9 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,iy,iz)   = 0 
           latt(ix,iy,zp1)   = 0 
           latt(xp1,iy,zp1)  = 0 
-          call update_real_cell_list
+          if (pos_ip1(4)/=0) then
+            call update_real_cell_list
+          end if
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -641,7 +685,9 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,iy,iz)   = 0 
             latt(ix,iy,zp1)   = 0 
             latt(xp1,iy,zp1)  = 0 
-            call update_real_cell_list
+            if (pos_ip1(4)/=0) then
+              call update_real_cell_list
+            end if
           end if
         end if
       end if
@@ -653,7 +699,11 @@ subroutine new_position(EE, DeltaE)
       testlat = latt(ix,ym1,iz)  + latt(xp1,ym1,iz) + &
        &        latt(ix,ym1,zp1) + latt(xp1,ym1,zp1)
       if( testlat == 0 ) then
-        call Delta_Energy(DeltaE)
+        if (pos_ip1(4)/=0) then
+          call Delta_Energy(DeltaE)
+        else
+          DeltaE = 0
+        end if
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
@@ -670,7 +720,9 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,yp1,iz)  = 0 
           latt(ix,yp1,zp1)  = 0 
           latt(xp1,yp1,zp1) = 0 
-          call update_real_cell_list
+          if (pos_ip1(4)/=0) then
+            call update_real_cell_list
+          end if
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -689,7 +741,9 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,yp1,iz)  = 0 
             latt(ix,yp1,zp1)  = 0 
             latt(xp1,yp1,zp1) = 0 
-            call update_real_cell_list
+            if (pos_ip1(4)/=0) then
+              call update_real_cell_list
+            end if
           end if
         end if
       end if
@@ -700,7 +754,11 @@ subroutine new_position(EE, DeltaE)
       testlat = latt(ix,iy,zp2)  + latt(xp1,iy,zp2) + &
          &      latt(ix,yp1,zp2) + latt(xp1,yp1,zp2)
       if( testlat == 0 ) then
-        call Delta_Energy(DeltaE)
+        if (pos_ip1(4)/=0) then
+          call Delta_Energy(DeltaE)
+        else
+          DeltaE = 0
+        end if
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
@@ -717,7 +775,9 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,iy,iz)   = 0 
           latt(ix,yp1,iz)   = 0 
           latt(xp1,yp1,iz)  = 0 
-          call update_real_cell_list
+          if (pos_ip1(4)/=0) then
+            call update_real_cell_list
+          end if
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -736,7 +796,9 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,iy,iz)   = 0 
             latt(ix,yp1,iz)   = 0 
             latt(xp1,yp1,iz)  = 0 
-            call update_real_cell_list
+            if (pos_ip1(4)/=0) then
+              call update_real_cell_list
+            end if
           end if
         end if
       end if
@@ -748,7 +810,11 @@ subroutine new_position(EE, DeltaE)
       testlat = latt(ix,iy,zm1)  + latt(xp1,iy,zm1) + &
        &        latt(ix,yp1,zm1) + latt(xp1,yp1,zm1)
       if( testlat == 0 ) then
-        call Delta_Energy(DeltaE)
+        if (pos_ip1(4)/=0) then
+          call Delta_Energy(DeltaE)
+        else
+          DeltaE = 0
+        end if
         if ( DeltaE < 0 ) then
           pos(ip,1:3) = pos_ip1(1:3)
           EE = EE + DeltaE
@@ -765,7 +831,9 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,iy,zp1)  = 0 
           latt(ix,yp1,zp1)  = 0 
           latt(xp1,yp1,zp1) = 0 
-          call update_real_cell_list
+          if (pos_ip1(4)/=0) then
+            call update_real_cell_list
+          end if
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -784,7 +852,9 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,iy,zp1)  = 0 
             latt(ix,yp1,zp1)  = 0 
             latt(xp1,yp1,zp1) = 0 
-            call update_real_cell_list
+            if (pos_ip1(4)/=0) then
+              call update_real_cell_list
+            end if
           end if
         end if
       end if

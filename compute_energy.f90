@@ -7,10 +7,11 @@ save
   real*8,  private :: lb          !Bjerrum length
   real*8,  private :: EF          !electric field
   real*8,  private :: tol         !tolerance
-  real*8, private  :: tau_rf      !time ratio of real space and fourier space
+  real*8,  private :: tau_rf      !time ratio of real space and fourier space
   real*8,  private :: alpha       !Ewald screening parameter alpha
   real*8,  private :: alpha2      !alpha2=alpha*alpha
   real*8,  private :: Mz          !total dipole moment
+  real*8,  private :: dMz         !delta Mz
   !
   !real space
   real*8,  private :: rcc         !Cut off radius of real space
@@ -109,7 +110,7 @@ end subroutine initialize_energy_parameter
 subroutine initialize_energy_arrays
   use global_variables
   implicit none
-  
+
   if ( qq /= 0 ) then
     !
     !Initialize charge with lind list. From this subroutine, pos array is needed.
@@ -272,6 +273,7 @@ subroutine energy_lookup_table(EE, rt, ft)
   real*8 :: st, fn, EE1, EE2,rr(4)
 
   EE = 0
+  EE1 = 0
   !
   !real space
   call cpu_time(st)
@@ -289,26 +291,26 @@ subroutine energy_lookup_table(EE, rt, ft)
       do while(k/=0)
         l = charge(k)
         if (l/=m) then
-          x = pos(m,1) - pos(l,1)
-          y = pos(m,2) - pos(l,2)
-          z = pos(m,3) - pos(l,3)
+          x = pos(m,1)-pos(l,1)
+          y = pos(m,2)-pos(l,2)
+          z = pos(m,3)-pos(l,3)
           if ((x*x+y*y+z*z)<rcc2) then
-            EE = EE + pos(m,4)*pos(l,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+            EE=EE+pos(l,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
           end if
         end if
         k = cell_list_r(k)
       end do
     end do
+    EE = EE + EE1 * pos(m,4)
   end do
   call cpu_time(fn)
   rt = fn - st 
-
-  EE1 = EE
-  write(*,*) 'real energy', EE, rt
+!   EE1 = EE
+!   write(*,*) 'real energy', EE, rt
   !
   !fourier space
-  call cpu_time(st)
-  write(*,*) size(fourier_ij)
+!   call cpu_time(st)
+!   write(*,*) size(fourier_ij)
   do i = 1, Nq
     m = charge(i)
     EE2=0
@@ -327,13 +329,14 @@ subroutine energy_lookup_table(EE, rt, ft)
   end do
   call cpu_time(fn)
   ft = fn - st
-  write(*,*) 'fourier energy', EE-EE1,ft
-  write(*,*) 'coulomb energy', EE
+!   write(*,*) 'fourier energy', EE-EE1,ft
+!   write(*,*) 'coulomb energy', EE,Mz
   !
   !modified term of slab geometry
-  EE = EE/2 + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
-  write(*,*) 'coulomb energy with modification', EE
-  stop
+  EE = EE/2 + 2*pi/(Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
+!   write(*,*) 'coulomb energy with modification', EE
+!   stop
+
 end subroutine energy_lookup_table
 
 
@@ -511,7 +514,7 @@ subroutine Initialize_Charge
     if ( pos(i,4) /= 0 ) then
       j = j + 1
       charge(j) = i
-      Mz = Mz + pos(i,4)*pos(i,3)
+      Mz = Mz + pos(i,4)*pos(i,3)/2.D0 !sigma unit
     end if
   end do
 
@@ -663,7 +666,7 @@ subroutine Delta_Energy(DeltaE)
   implicit none
   real*8, intent(out) :: DeltaE
   integer :: i,j,k,x,y,z,x1,y1,z1,t,icelx,icely,icelz,ncel
-  real*8 :: EE1,EE2,rr,dMz
+  real*8 :: EE1,EE2,rr
   real*8, dimension(3) :: rij
 
   DeltaE = 0
@@ -676,24 +679,18 @@ subroutine Delta_Energy(DeltaE)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-      x1 = pos_ip0(1) - pos(k,1)
-      y1 = pos_ip0(2) - pos(k,2)
-      z1 = pos_ip0(3) - pos(k,3)     
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE1 = EE1 + pos(k,4)*fourier_ij(t)
 
-      x1 = pos_ip1(1) - pos(k,1)
-      y1 = pos_ip1(2) - pos(k,2)
-      z1 = pos_ip1(3) - pos(k,3)
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE2 = EE2 + pos(k,4)*fourier_ij(t)
+      EE1 = EE1 + pos(k,4)*fourier_ij(  &
+            fourier_x( pos_ip0(1) - pos(k,1) ) + &
+            fourier_y( pos_ip0(2) - pos(k,2) ) + &
+            fourier_z( pos_ip0(3) - pos(k,3) ) )
+
+      EE2 = EE2 + pos(k,4)*fourier_ij(  &
+            fourier_x( pos_ip1(1) - pos(k,1) ) + &
+            fourier_y( pos_ip1(2) - pos(k,2) ) + &
+            fourier_z( pos_ip1(3) - pos(k,3) ) )
     end if
+    j = cell_list_q(j)
   end do
 
   DeltaE = pos_ip1(4) * (EE2-EE1)
@@ -717,9 +714,11 @@ subroutine Delta_Energy(DeltaE)
         y = pos_ip0(2) - pos(k,2)
         z = pos_ip0(3) - pos(k,3)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE1 = EE1 + pos_ip0(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE1=EE1+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
+      j = cell_list_r(j)
+      write(*,*) j,ip,cell_list_r(j)
     end do
   end do
   EE1 = EE1 * pos_ip1(4)
@@ -741,9 +740,10 @@ subroutine Delta_Energy(DeltaE)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE2 = EE2 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE2=EE2+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
+      j = cell_list_r(j)
     end do
   end do
   EE2 = EE2 * pos_ip1(4)
@@ -752,10 +752,8 @@ subroutine Delta_Energy(DeltaE)
   !
   ! Modified term of slab geometry
   dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))/2.D0         !sigma unit
-
   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
 
-  Mz = Mz + dMz
   !
   ! External field energy
   DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
@@ -768,7 +766,7 @@ subroutine Delta_Energy_add(DeltaE)
   implicit none
   real*8, intent(out) :: DeltaE
   integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
-  real*8 :: EE1,EE2,rr,dMz
+  real*8 :: EE1,EE2,rr
   real*8, dimension(3) :: rij
 
   DeltaE = 0
@@ -782,23 +780,16 @@ subroutine Delta_Energy_add(DeltaE)
   j = cell_list_q(Nq+1)
   do while (j/=0)
     k = charge(j)
-    x1 = pos_ip0(1) - pos(k,1)
-    y1 = pos_ip0(2) - pos(k,2)
-    z1 = pos_ip0(3) - pos(k,3)     
-    x1 = fourier_x(x1)
-    y1 = fourier_y(y1)
-    z1 = fourier_z(z1)
-    t = x1 + y1 + z1
-    EE1 = EE1 + pos(k,4)*fourier_ij(t)
+    EE1 = EE1 + pos(k,4)*fourier_ij( &
+          fourier_x( pos_ip0(1) - pos(k,1) ) + &
+          fourier_y( pos_ip0(2) - pos(k,2) ) + &
+          fourier_z( pos_ip0(3) - pos(k,3) ) )
 
-    x1 = pos_ip1(1) - pos(k,1)
-    y1 = pos_ip1(2) - pos(k,2)
-    z1 = pos_ip1(3) - pos(k,3)
-    x1 = fourier_x(x1)
-    y1 = fourier_y(y1)
-    z1 = fourier_z(z1)
-    t = x1 + y1 + z1
-    EE2 = EE2 + pos(k,4)*fourier_ij(t)
+    EE2 = EE2 + pos(k,4)*fourier_ij( &
+          fourier_x( pos_ip1(1) - pos(k,1) ) + &
+          fourier_y( pos_ip1(2) - pos(k,2) ) + &
+          fourier_z( pos_ip1(3) - pos(k,3) ) )
+    j = cell_list_q(j)
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
@@ -824,6 +815,7 @@ subroutine Delta_Energy_add(DeltaE)
         EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
     end do
+    j = cell_list_r(j)
   end do
   EE1 = EE1 * qq1
 
@@ -846,6 +838,7 @@ subroutine Delta_Energy_add(DeltaE)
         EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
     end do
+    j = cell_list_r(j)
   end do
   EE2 = EE2 * qq1
   DeltaE = DeltaE + EE1 + EE2
@@ -866,7 +859,7 @@ subroutine Delta_Energy_add(DeltaE)
 
   !
   !modified term of slab geometry
-  dMz = pos_ip1i(4)*pos_ip1i(3) + pos_ip1(4)*pos_ip1(3)
+  dMz = pos_ip1i(4)*pos_ip1i(3)/2.D0 + pos_ip1(4)*pos_ip1(3)/2.D0
   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
 
   !
@@ -881,40 +874,32 @@ subroutine Delta_Energy_delete(DeltaE)
   implicit none
   real*8, intent(out) :: DeltaE
   integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
-  real*8 :: EE1,EE2,rr,dMz
+  real*8 :: EE1,EE2,rr
   real*8, dimension(3) :: rij
 
   DeltaE = 0
-
   !
   ! Fourier Space
   EE1 = 0
   EE2 = 0
-  qq1 = pos_ip0(4)
-  qq2 = pos_ip0i(4)
+  qq1 = pos_ip0(4)         !polymer
+  qq2 = pos_ip0i(4)        !ions
   j = cell_list_q(Nq+1)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-      x1 = pos_ip0(1) - pos(k,1)
-      y1 = pos_ip0(2) - pos(k,2)
-      z1 = pos_ip0(3) - pos(k,3)     
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE1 = EE1 + pos(k,4)*fourier_ij(t)
+      EE1 = EE1 + pos(k,4)*fourier_ij( &
+            fourier_x( pos_ip0(1) - pos(k,1) ) + &
+            fourier_y( pos_ip0(2) - pos(k,2) ) + &
+            fourier_z( pos_ip0(3) - pos(k,3) ) )
     end if
     if (k/=ip1) then
-      x1 = pos_ip1(1) - pos(k,1)
-      y1 = pos_ip1(2) - pos(k,2)
-      z1 = pos_ip1(3) - pos(k,3)
-      x1 = fourier_x(x1)
-      y1 = fourier_y(y1)
-      z1 = fourier_z(z1)
-      t = x1 + y1 + z1
-      EE2 = EE2 + pos(k,4)*fourier_ij(t)
+      EE2 = EE2 + pos(k,4)*fourier_ij( &
+            fourier_x( pos_ip1i(1) - pos(k,1) ) + &
+            fourier_y( pos_ip1i(2) - pos(k,2) ) + &
+            fourier_z( pos_ip1i(3) - pos(k,3) ) )
     end if
+    j = cell_list_q(j)
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
@@ -938,9 +923,10 @@ subroutine Delta_Energy_delete(DeltaE)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE1=EE1+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
+      j = cell_list_r(j)
     end do
   end do
   EE1 = EE1 * qq1
@@ -962,13 +948,15 @@ subroutine Delta_Energy_delete(DeltaE)
         y = pos_ip1i(2) - pos(k,2)
         z = pos_ip1i(3) - pos(k,3)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE2 = EE2 + pos_ip1i(3)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE2=EE2+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
         end if
       end if
+      j = cell_list_r(j)
     end do
   end do
   EE2 = EE2 * qq1
   DeltaE = DeltaE + EE1 + EE2
+
   !
   !interaction of the added two particles
   x = pos_ip1i(1) - pos_ip1(1)
@@ -984,7 +972,7 @@ subroutine Delta_Energy_delete(DeltaE)
   DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
   !
   !modified term of slab geometry
-  dMz = pos_ip0i(4)*pos_ip0i(3) + pos_ip0(4)*pos_ip0(3)
+  dMz = pos_ip0i(4)*pos_ip0i(3)/2.D0 + pos_ip0(4)*pos_ip0(3)/2.D0
   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
   !
   !External field energy
@@ -1001,6 +989,8 @@ subroutine update_real_cell_list
 
   call update_real_cell_list_delete
   call update_real_cell_list_add
+
+  Mz = Mz + dMz
 
 end subroutine update_real_cell_list
 
