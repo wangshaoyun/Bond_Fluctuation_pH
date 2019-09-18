@@ -277,11 +277,14 @@ subroutine monte_carlo_move( EE, DeltaE )
   real*8, intent(inout) :: EE
   real*8, intent(out) :: DeltaE
   integer :: i
+  real*8 :: st,fn
 
+accept = 0
+call cpu_time(st)
   do i = 1, NN - Nga
     if ( mod(i,DeltaStep) == 0 ) then
       call choose_particle_pH
-  write(*,*) EE, DeltaE,ip,pos(ip,4),i,1
+!   write(*,*) EE, DeltaE,ip,pos(ip,4),i,1
       if (pos(ip,4)==0) then
         call add_particle(EE,DeltaE)
       else
@@ -289,12 +292,13 @@ subroutine monte_carlo_move( EE, DeltaE )
       end if
     else
       call choose_particle
-  write(*,*) EE, DeltaE,ip,pos(ip,4),i,0
+!   write(*,*) EE, DeltaE,ip,pos(ip,4),i,0
 
       call new_position(EE,DeltaE)
     end if
   end do
-
+call cpu_time(fn)
+write(*,*) fn-st,1.*accept/(NN-Nga),EE,DeltaE
 
 end subroutine monte_carlo_move
 
@@ -367,9 +371,9 @@ subroutine add_particle(EE,DeltaE)
       latt(xp,yp,zp) = 1
       pos(ip,:) = pos_ip1
       pos(ip1,:) = pos_ip1i
-      call update_real_cell_list_add
-      call update_charge_cell_list_add
+      call update_cell_list_pH_add
       EE = EE + DeltaE
+      accept = accept + 1
     else
       call random_number(rnd1)
       if (rnd1<(exp(-(DeltaE+U_prot)*beta))) then
@@ -383,9 +387,9 @@ subroutine add_particle(EE,DeltaE)
         latt(xp,yp,zp) = 1
         pos(ip,:) = pos_ip1
         pos(ip1,:) = pos_ip1i
-        call update_real_cell_list_add    
-        call update_charge_cell_list_add
+        call update_cell_list_pH_add
         EE = EE + DeltaE 
+        accept = accept + 1
       end if 
     end if
   end if
@@ -429,9 +433,9 @@ subroutine delete_particle(EE, DeltaE)
     latt(xp,yp,zp) = 0    
     pos(ip,:) = pos_ip1
     pos(ip1,:) = pos_ip1i
-    call update_real_cell_list_delete
-    call update_charge_cell_list_delete
+    call update_cell_list_pH_delete
     EE = EE + DeltaE
+    accept = accept + 1
   else
     call random_number(rnd)
     if (rnd<(exp(-(DeltaE-U_prot)*beta))) then
@@ -445,9 +449,9 @@ subroutine delete_particle(EE, DeltaE)
       latt(xp,yp,zp) = 0    
       pos(ip,:) = pos_ip1
       pos(ip1,:) = pos_ip1i
-      call update_real_cell_list_delete
-      call update_charge_cell_list_delete
+      call update_cell_list_pH_delete
       EE = EE + DeltaE
+      accept = accept + 1
     end if
   end if
 
@@ -556,6 +560,7 @@ subroutine new_position(EE, DeltaE)
           if (pos_ip1(4)/=0) then
             call update_real_cell_list
           end if
+          accept = accept + 1
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -577,6 +582,7 @@ subroutine new_position(EE, DeltaE)
             if (pos_ip1(4)/=0) then
               call update_real_cell_list
             end if
+            accept = accept + 1
           end if
         end if
       end if
@@ -612,6 +618,7 @@ subroutine new_position(EE, DeltaE)
           if (pos_ip1(4)/=0) then
             call update_real_cell_list
           end if
+          accept = accept + 1
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -633,6 +640,7 @@ subroutine new_position(EE, DeltaE)
             if (pos_ip1(4)/=0) then
               call update_real_cell_list
             end if
+            accept = accept + 1
           end if
         end if
       end if
@@ -667,6 +675,7 @@ subroutine new_position(EE, DeltaE)
           if (pos_ip1(4)/=0) then
             call update_real_cell_list
           end if
+          accept = accept + 1
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -688,6 +697,7 @@ subroutine new_position(EE, DeltaE)
             if (pos_ip1(4)/=0) then
               call update_real_cell_list
             end if
+            accept = accept + 1
           end if
         end if
       end if
@@ -723,6 +733,7 @@ subroutine new_position(EE, DeltaE)
           if (pos_ip1(4)/=0) then
             call update_real_cell_list
           end if
+          accept = accept + 1
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -744,6 +755,7 @@ subroutine new_position(EE, DeltaE)
             if (pos_ip1(4)/=0) then
               call update_real_cell_list
             end if
+            accept = accept + 1
           end if
         end if
       end if
@@ -778,6 +790,7 @@ subroutine new_position(EE, DeltaE)
           if (pos_ip1(4)/=0) then
             call update_real_cell_list
           end if
+          accept = accept + 1
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -799,6 +812,7 @@ subroutine new_position(EE, DeltaE)
             if (pos_ip1(4)/=0) then
               call update_real_cell_list
             end if
+            accept = accept + 1
           end if
         end if
       end if
@@ -834,6 +848,7 @@ subroutine new_position(EE, DeltaE)
           if (pos_ip1(4)/=0) then
             call update_real_cell_list
           end if
+          accept = accept + 1
         else
           call random_number(rnd)
           if ( rnd < Exp(-Beta*DeltaE) ) then
@@ -855,6 +870,7 @@ subroutine new_position(EE, DeltaE)
             if (pos_ip1(4)/=0) then
               call update_real_cell_list
             end if
+            accept = accept + 1
           end if
         end if
       end if

@@ -132,12 +132,12 @@ subroutine read_force_parameters
   use global_variables
   implicit none
 
-  open(10,file='./energy_data.txt')
-    read(10,*) lb
-    read(10,*) EF           
-    read(10,*) tol
-    read(10,*) tau_rf
-  close(10)
+  open(111,file='./energy_data.txt')
+    read(111,*) lb
+    read(111,*) EF           
+    read(111,*) tol
+    read(111,*) tau_rf
+  close(111)
 
 end subroutine read_force_parameters
 
@@ -552,11 +552,11 @@ subroutine Initialize_cell_list_q
     inv_cell_list_q(Nq+1) = i
   end do
 
-!   open(100,file='./data/cell_list_q.txt')
-!     do i = 1, Nq + 1
-!       write(100,*) cell_list_q(i), inv_cell_list_q(i)
-!     end do
-!   close(100)
+  open(112,file='./data/cell_list_q.txt')
+    do i = 1, Nq + 1
+      write(112,*) cell_list_q(i), inv_cell_list_q(i)
+    end do
+  close(112)
 
 end subroutine Initialize_cell_list_q
 
@@ -583,6 +583,8 @@ subroutine Initialize_real_cell_list
 
   allocate(cell_list_r(Nq))
   allocate(inv_cell_list_r(Nq))
+  cell_list_r = 0
+  inv_cell_list_r = 0
 
   do i = 1, Nq
     j = charge(i)
@@ -642,11 +644,12 @@ subroutine Initialize_real_cell_list
     end do
   end do
 
-!   open(100,file='./data/cell_list_r.txt')
-!     do i = 1, NN
-!       write(100,*) i,cell_list_r(i), inv_cell_list_r(i)
+!   open(113,file='./data/cell_list_r.txt')
+!     do i = 1, Nq
+!       write(113,*) i, cell_list_r(i), inv_cell_list_r(i)
 !     end do
-!   close(100)
+!   close(113)
+
 
 !   open(100,file='./data/hoc_r.txt')
 !     do i = 1, nclx
@@ -679,7 +682,6 @@ subroutine Delta_Energy(DeltaE)
   do while (j/=0)
     k = charge(j)
     if (k/=ip) then
-
       EE1 = EE1 + pos(k,4)*fourier_ij(  &
             fourier_x( pos_ip0(1) - pos(k,1) ) + &
             fourier_y( pos_ip0(2) - pos(k,2) ) + &
@@ -691,6 +693,10 @@ subroutine Delta_Energy(DeltaE)
             fourier_z( pos_ip1(3) - pos(k,3) ) )
     end if
     j = cell_list_q(j)
+    if ((j==cell_list_q(j) .and. j/=0).or.abs(EE1+EE2)>1e10) then
+      write(*,*) j,ip,cell_list_q(j),'q'
+      stop
+    end if
   end do
 
   DeltaE = pos_ip1(4) * (EE2-EE1)
@@ -718,7 +724,11 @@ subroutine Delta_Energy(DeltaE)
         end if
       end if
       j = cell_list_r(j)
-      write(*,*) j,ip,cell_list_r(j)
+      if ((j==cell_list_r(j) .and. j/=0).or.abs(EE1)>1e10) then
+        write(*,*) 
+        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
+        stop
+      end if
     end do
   end do
   EE1 = EE1 * pos_ip1(4)
@@ -744,6 +754,11 @@ subroutine Delta_Energy(DeltaE)
         end if
       end if
       j = cell_list_r(j)
+      if ((j==cell_list_r(j) .and. j/=0).or.abs(EE2)>1e10) then
+        write(*,*) 
+        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
+        stop
+      end if
     end do
   end do
   EE2 = EE2 * pos_ip1(4)
@@ -757,6 +772,11 @@ subroutine Delta_Energy(DeltaE)
   !
   ! External field energy
   DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
+
+  if (abs(DeltaE)>1e10) then
+    write(*,*) '777'
+    stop
+  end if
 
 end subroutine Delta_Energy
 
@@ -790,6 +810,10 @@ subroutine Delta_Energy_add(DeltaE)
           fourier_y( pos_ip1(2) - pos(k,2) ) + &
           fourier_z( pos_ip1(3) - pos(k,3) ) )
     j = cell_list_q(j)
+    if ((j==cell_list_q(j) .and. j/=0).or.(EE1+EE2)<-1e10) then
+      write(*,*) j,ip,cell_list_q(j),'q'
+      stop
+    end if
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
@@ -814,8 +838,12 @@ subroutine Delta_Energy_add(DeltaE)
       if ((x*x+y*y+z*z)<rcc2) then
         EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
+      j = cell_list_r(j)
     end do
-    j = cell_list_r(j)
+    if ((j==cell_list_r(j) .and. j/=0).or.abs(EE1)>1e10) then
+      write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
+      stop
+    end if
   end do
   EE1 = EE1 * qq1
 
@@ -837,8 +865,12 @@ subroutine Delta_Energy_add(DeltaE)
       if ((x*x+y*y+z*z)<rcc2) then
         EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
       end if
+      j = cell_list_r(j)
     end do
-    j = cell_list_r(j)
+    if ((j==cell_list_r(j) .and. j/=0).or.abs(EE2)>1e10) then
+      write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
+      stop
+    end if
   end do
   EE2 = EE2 * qq1
   DeltaE = DeltaE + EE1 + EE2
@@ -865,6 +897,11 @@ subroutine Delta_Energy_add(DeltaE)
   !
   !External field energy
   DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
+
+  if (abs(DeltaE)>1e10) then
+    write(*,*) '897'
+    stop
+  end if
 
 end subroutine Delta_Energy_add
 
@@ -900,10 +937,17 @@ subroutine Delta_Energy_delete(DeltaE)
             fourier_z( pos_ip1i(3) - pos(k,3) ) )
     end if
     j = cell_list_q(j)
+    if (j==cell_list_q(j) .and. j/=0) then
+      write(*,*) j,ip,cell_list_q(j),'q'
+      stop
+    end if
   end do
 
   DeltaE = EE1*qq1 + EE2*qq2
-
+ if (abs(DeltaE)>1e10) then
+    write(*,*) '948'
+    stop
+  end if
   !
   ! Real Space
   EE1 = 0
@@ -927,10 +971,17 @@ subroutine Delta_Energy_delete(DeltaE)
         end if
       end if
       j = cell_list_r(j)
+      if ((j==cell_list_r(j) .and. j/=0) .or. abs(EE1)>1e10) then
+        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz
+        stop
+      end if
     end do
   end do
   EE1 = EE1 * qq1
-
+ if (abs(EE1)>1e10) then
+    write(*,*) '1978'
+    stop
+  end if
   EE2 = 0
   icelx = int(pos_ip1i(1)/clx)+1
   icely = int(pos_ip1i(2)/cly)+1
@@ -952,11 +1003,18 @@ subroutine Delta_Energy_delete(DeltaE)
         end if
       end if
       j = cell_list_r(j)
+      if ((j==cell_list_r(j) .and. j/=0).or. abs(EE2)>1e10) then
+        write(*,*) j,ip,cell_list_r(j),icelx,icely,icelz,EE2
+        stop
+      end if
     end do
   end do
   EE2 = EE2 * qq1
   DeltaE = DeltaE + EE1 + EE2
-
+  if (abs(EE2)>1e10) then
+    write(*,*) '1009'
+    stop
+  end if
   !
   !interaction of the added two particles
   x = pos_ip1i(1) - pos_ip1(1)
@@ -970,6 +1028,10 @@ subroutine Delta_Energy_delete(DeltaE)
   z = Periodic_z(z)
   t = x1 + y1 + z1
   DeltaE = DeltaE - qq1*qq2*(fourier_ij(t)+real_ij(x,y,z))
+  if (abs(DeltaE)>1e10) then
+    write(*,*) '1031',x,y,z,t,x1,y1,z1
+    stop
+  end if
   !
   !modified term of slab geometry
   dMz = pos_ip0i(4)*pos_ip0i(3)/2.D0 + pos_ip0(4)*pos_ip0(3)/2.D0
@@ -986,30 +1048,76 @@ end subroutine Delta_Energy_delete
 subroutine update_real_cell_list
   use global_variables
   implicit none
+  integer :: icelx,icely,icelz
 
-  call update_real_cell_list_delete
-  call update_real_cell_list_add
+  icelx = int(pos_ip0(1)/clx)+1
+  icely = int(pos_ip0(2)/cly)+1
+  icelz = int(pos_ip0(3)/clz)+1
+  call update_real_cell_list_delete(ip,icelx,icely,icelz)
+
+  icelx = int(pos_ip1(1)/clx)+1
+  icely = int(pos_ip1(2)/cly)+1
+  icelz = int(pos_ip1(3)/clz)+1
+  call update_real_cell_list_add(ip,icelx,icely,icelz)
 
   Mz = Mz + dMz
 
 end subroutine update_real_cell_list
 
 
-subroutine update_real_cell_list_add
+subroutine update_cell_list_pH_add
   use global_variables
   implicit none
-  integer :: icelx, icely, icelz
-  integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
-  integer :: ed, st 
+  integer :: icelx,icely,icelz
 
   icelx = int(pos_ip1(1)/clx)+1
   icely = int(pos_ip1(2)/cly)+1
   icelz = int(pos_ip1(3)/clz)+1
+  call update_real_cell_list_add(ip,icelx,icely,icelz)
+  call update_charge_cell_list_add(ip)
 
-  ii = inv_charge(ip)   !ii belongs to [1,Nq]
+  icelx = int(pos_ip1i(1)/clx)+1
+  icely = int(pos_ip1i(2)/cly)+1
+  icelz = int(pos_ip1i(3)/clz)+1
+  call update_real_cell_list_add(ip1,icelx,icely,icelz)
+  call update_charge_cell_list_add(ip1)
 
-  cell_list_r(ii) = hoc_r(icelx,icely,icelz)
-  hoc_r(icelx,icely,icelz) = ii
+  Mz = Mz + dMz
+  
+end subroutine update_cell_list_pH_add
+
+
+subroutine update_cell_list_pH_delete
+  use global_variables
+  implicit none
+  integer :: icelx,icely,icelz
+
+  icelx = int(pos_ip0(1)/clx)+1
+  icely = int(pos_ip0(2)/cly)+1
+  icelz = int(pos_ip0(3)/clz)+1
+  call update_real_cell_list_delete(ip,icelx,icely,icelz)
+  call update_charge_cell_list_delete(ip)
+
+  icelx = int(pos_ip0i(1)/clx)+1
+  icely = int(pos_ip0i(2)/cly)+1
+  icelz = int(pos_ip0i(3)/clz)+1 
+  call update_real_cell_list_delete(ip1,icelx,icely,icelz)
+  call update_charge_cell_list_delete(ip1)
+
+  Mz = Mz + dMz
+
+end subroutine update_cell_list_pH_delete
+
+
+subroutine update_real_cell_list_add(iq,icelx,icely,icelz)
+  use global_variables
+  implicit none
+  integer, intent(in) :: iq
+  integer, intent(in) :: icelx, icely, icelz
+  integer :: nti,bfi,ii,j       ! next particle of ii, before particle of ii
+  integer :: ed, st 
+
+  ii = inv_charge(iq)   !ii belongs to [1,Nq]
 
   inv_cell_list_r(ii) = 0
   if ( inv_hoc_r(icelx,icely,icelz) /=0 ) then
@@ -1018,24 +1126,34 @@ subroutine update_real_cell_list_add
     inv_hoc_r(icelx,icely,icelz) = ii
   end if
 
+  cell_list_r(ii) = hoc_r(icelx,icely,icelz)
+  hoc_r(icelx,icely,icelz) = ii
+
+!   j = hoc_r(icelx,icely,icelz)  
+!   do while (j/=0)
+!     j = cell_list_r(j)
+!     if ((j==cell_list_r(j) .and. j/=0).or. j>20000) then
+!       write(*,*) j
+!       write(*,*) 'add'
+!       stop
+!     end if
+!   end do
+
 end subroutine update_real_cell_list_add
 
 
-subroutine update_real_cell_list_delete
+subroutine update_real_cell_list_delete(iq,icelx,icely,icelz)
   use global_variables
   implicit none
-  integer :: icelx, icely, icelz
-  integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
+  integer, intent(in) :: iq
+  integer, intent(in) :: icelx, icely, icelz
+  integer :: nti,bfi,ii,j       ! next particle of ii, before particle of ii
   integer :: ed, st 
 
-  icelx = int(pos_ip0(1)/clx)+1
-  icely = int(pos_ip0(2)/cly)+1
-  icelz = int(pos_ip0(3)/clz)+1
+  ii = inv_charge(iq)   !ii belongs to [1,Nq]
 
-  ii = inv_charge(ip)   !ii belongs to [1,Nq]
-
-  nti = cell_list_r(ii)
-  bfi = inv_cell_list_r(ii)
+  bfi = cell_list_r(ii)
+  nti = inv_cell_list_r(ii)
 
   if ( bfi/=0 .and. nti/=0 ) then        !middle
     cell_list_r(nti) = bfi
@@ -1043,26 +1161,35 @@ subroutine update_real_cell_list_delete
   elseif ( bfi==0 .and. nti/=0 ) then    !the first one
     cell_list_r(nti) = bfi
     inv_hoc_r(icelx,icely,icelz) = nti
-  elseif ( bfi/=0 .and. nti==0 ) then
+  elseif ( bfi/=0 .and. nti==0 ) then    !the last one
     hoc_r(icelx,icely,icelz) = bfi
-    inv_cell_list_q(bfi) = nti
-  else
-    hoc_r(icelx,icely,icelz) = bfi
-    inv_hoc_r(icelx,icely,icelz) = nti
+    inv_cell_list_r(bfi) = nti
+  else                                   !only one
+    hoc_r(icelx,icely,icelz) = nti
+    inv_hoc_r(icelx,icely,icelz) = bfi
   end if
+
+  j = hoc_r(icelx,icely,icelz) 
+  do while (j/=0)
+    j = cell_list_r(j)
+    if ((j==cell_list_r(j) .and. j/=0).or.j>20000) then
+      write(*,*) 'delete'
+      write(*,*) j,bfi,nti,ii,icelx,icely,icelz
+      stop
+    end if
+  end do
+
 
 end subroutine update_real_cell_list_delete
 
 
-subroutine update_charge_cell_list_add
+subroutine update_charge_cell_list_add(iq)
   use global_variables
   implicit none
-  integer :: ii       
+  integer, intent(in) :: iq
+  integer :: ii, j     
 
-  ii = inv_charge(ip)         ! ii belongs to [1,Nq]
-
-  cell_list_q(ii) = cell_list_q(Nq+1)
-  cell_list_q(Nq+1) = ii
+  ii = inv_charge(iq)         ! ii belongs to [1,Nq]
 
   inv_cell_list_q(ii) = 0
   if ( cell_list_q(Nq+1)/=0 ) then
@@ -1071,15 +1198,29 @@ subroutine update_charge_cell_list_add
     inv_cell_list_q(Nq+1) = ii
   end if
 
+  cell_list_q(ii) = cell_list_q(Nq+1)
+  cell_list_q(Nq+1) = ii
+
+  j = cell_list_q(Nq+1) 
+  do while (j/=0)
+    j = cell_list_q(j)
+    if ((j==cell_list_q(j) .and. j/=0) .or. j>20000) then
+      write(*,*) 'add pH'
+      write(*,*) j
+      stop
+    end if
+  end do
+
 end subroutine update_charge_cell_list_add
 
 
-subroutine update_charge_cell_list_delete
+subroutine update_charge_cell_list_delete(iq)
   use global_variables
   implicit none
-  integer :: nti,bfi,ii       ! next particle of ii, before particle of ii
+  integer, intent(in) :: iq
+  integer :: nti,bfi,ii,j       ! next particle of ii, before particle of ii
 
-  ii = inv_charge(ip)         !ii belongs to [1,Nq]
+  ii = inv_charge(iq)         !ii belongs to [1,Nq]
   
   bfi = cell_list_q(ii)
   nti = inv_cell_list_q(ii)
@@ -1094,9 +1235,19 @@ subroutine update_charge_cell_list_delete
     cell_list_q(Nq+1) = bfi
     inv_cell_list_q(bfi) = nti
   else
-    cell_list_q(Nq+1) = bfi
-    inv_cell_list_q(Nq+1) = nti
+    cell_list_q(Nq+1) = nti
+    inv_cell_list_q(Nq+1) = bfi
   end if
+
+  j = cell_list_q(Nq+1) 
+  do while (j/=0)
+    j = cell_list_q(j)
+    if ((j==cell_list_q(j) .and. j/=0).or.j>20000) then
+      write(*,*) 'delete pH'
+      write(*,*) j,ii
+      stop
+    end if
+  end do
 
 end subroutine update_charge_cell_list_delete
 
