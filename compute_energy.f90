@@ -1175,15 +1175,15 @@ subroutine update_real_cell_list_delete(iq,icelx,icely,icelz)
     inv_hoc_r(icelx,icely,icelz) = bfi
   end if
 
-  j = hoc_r(icelx,icely,icelz) 
-  do while (j/=0)
-    j = cell_list_r(j)
-    if ((j==cell_list_r(j) .and. j/=0).or.j>20000) then
-      write(*,*) 'delete'
-      write(*,*) j,bfi,nti,ii,icelx,icely,icelz
-      stop
-    end if
-  end do
+!   j = hoc_r(icelx,icely,icelz) 
+!   do while (j/=0)
+!     j = cell_list_r(j)
+!     if ((j==cell_list_r(j) .and. j/=0).or.j>20000) then
+!       write(*,*) 'delete'
+!       write(*,*) j,bfi,nti,ii,icelx,icely,icelz
+!       stop
+!     end if
+!   end do
 
 end subroutine update_real_cell_list_delete
 
@@ -1206,15 +1206,15 @@ subroutine update_charge_cell_list_add(iq)
   cell_list_q(ii) = cell_list_q(Nq+1)
   cell_list_q(Nq+1) = ii
 
-  j = cell_list_q(Nq+1) 
-  do while (j/=0)
-    j = cell_list_q(j)
-    if ((j==cell_list_q(j) .and. j/=0) .or. j>20000) then
-      write(*,*) 'add pH'
-      write(*,*) j
-      stop
-    end if
-  end do
+!   j = cell_list_q(Nq+1) 
+!   do while (j/=0)
+!     j = cell_list_q(j)
+!     if ((j==cell_list_q(j) .and. j/=0) .or. j>20000) then
+!       write(*,*) 'add pH'
+!       write(*,*) j
+!       stop
+!     end if
+!   end do
 
 end subroutine update_charge_cell_list_add
 
@@ -1244,15 +1244,15 @@ subroutine update_charge_cell_list_delete(iq)
     inv_cell_list_q(Nq+1) = bfi
   end if
 
-  j = cell_list_q(Nq+1) 
-  do while (j/=0)
-    j = cell_list_q(j)
-    if ((j==cell_list_q(j) .and. j/=0).or.j>20000) then
-      write(*,*) 'delete pH'
-      write(*,*) j,ii
-      stop
-    end if
-  end do
+!   j = cell_list_q(Nq+1) 
+!   do while (j/=0)
+!     j = cell_list_q(j)
+!     if ((j==cell_list_q(j) .and. j/=0).or.j>20000) then
+!       write(*,*) 'delete pH'
+!       write(*,*) j,ii
+!       stop
+!     end if
+!   end do
 
 end subroutine update_charge_cell_list_delete
 
