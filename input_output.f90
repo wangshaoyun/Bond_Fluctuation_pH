@@ -133,6 +133,7 @@ subroutine data_operation
       Nq_PE = 0 
     end if
   end if
+  Nq_net=Nq_PE
   !
   !the number of Salt monomers
   if ( abs(qqi) == 0 ) then
@@ -726,8 +727,8 @@ subroutine write_energy(j,EE,EE1)
   real*8, intent(in) :: EE1
 
   open(36,position='append', file='./data/energy.txt')
-    write(36,361) 1.*j, EE, EE1
-    361 format(3F15.6)
+    write(36,361) 1.*j, EE, EE1, Nq_net*1.D0
+    361 format(4F15.6)
   close(36)  
 
 end subroutine write_energy

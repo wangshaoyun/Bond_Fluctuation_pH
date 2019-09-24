@@ -279,11 +279,13 @@ end subroutine error_analysis
 
 subroutine monte_carlo_move( EE, DeltaE )
   use global_variables
+  use compute_energy
   implicit none
   real*8, intent(inout) :: EE
   real*8, intent(out) :: DeltaE
   integer :: i
   real*8 :: st,fn
+  real*8 :: real_time, fourier_time, EE1, EE2
 
 accept = 0
 call cpu_time(st)
@@ -291,13 +293,22 @@ call cpu_time(st)
     if ( mod(i,DeltaStep) == 0 .and. Nq/=0 ) then
       call choose_particle_pH
       if (pos(ip,4)==0) then
+!         call energy_lookup_table(EE1, real_time, fourier_time)
         call add_particle(EE,DeltaE)
+!         call energy_lookup_table(EE2, real_time, fourier_time)
+!         write(*,*) 'add',EE2-EE1,DeltaE,EE2,EE,ip
       else
+!         call energy_lookup_table(EE1, real_time, fourier_time)
         call delete_particle(EE,DeltaE)
+!         call energy_lookup_table(EE2, real_time, fourier_time)
+!         write(*,*) 'delete',EE2-EE1,DeltaE,EE2,EE,ip
       end if
     else
       call choose_particle
+!       call energy_lookup_table(EE1, real_time, fourier_time)
       call new_position(EE,DeltaE)
+!       call energy_lookup_table(EE2, real_time, fourier_time)
+!       write(*,*) 'move',EE2-EE1,DeltaE,EE2,EE,ip
     end if
   end do
 call cpu_time(fn)

@@ -283,15 +283,15 @@ subroutine energy_lookup_table(EE, rt, ft)
   real*8, intent(out) :: ft
   integer :: i, j, k, l, m, n, x1, y1, z1, x, y, z, t
   integer :: icelx, icely, icelz, ncel
-  real*8 :: st, fn, EE1, EE2,rr(4)
+  real*8 :: st, fn, EE1, EE2,rr(4),q_total
 
   EE = 0
-  EE1 = 0
   !
   !real space
   call cpu_time(st)
   do i = 1, Nq
     m = charge(i)
+    EE1 = 0
     icelx = int((pos(m,1)-1)/clx)+1
     icely = int((pos(m,2)-1)/cly)+1
     icelz = int((pos(m,3)-1)/clz)+1
@@ -307,8 +307,11 @@ subroutine energy_lookup_table(EE, rt, ft)
           x = pos(m,1)-pos(l,1)
           y = pos(m,2)-pos(l,2)
           z = pos(m,3)-pos(l,3)
+          x = periodic_x(x)
+          y = periodic_y(y)
+          z = Periodic_z(z)
           if ((x*x+y*y+z*z)<rcc2) then
-            EE=EE+pos(l,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+            EE1=EE1+pos(l,4)*real_ij(x,y,z)
           end if
         end if
         k = cell_list_r(k)
@@ -316,14 +319,16 @@ subroutine energy_lookup_table(EE, rt, ft)
     end do
     EE = EE + EE1 * pos(m,4)
   end do
+  EE=EE
   call cpu_time(fn)
   rt = fn - st 
 !   EE1 = EE
 !   write(*,*) 'real energy', EE, rt
   !
   !fourier space
-!   call cpu_time(st)
+  call cpu_time(st)
 !   write(*,*) size(fourier_ij)
+  q_total = 0
   do i = 1, Nq
     m = charge(i)
     EE2=0
@@ -338,7 +343,8 @@ subroutine energy_lookup_table(EE, rt, ft)
       end if
     end do
     EE2= pos(m,4)*EE2
-    EE = EE + EE2
+    EE = EE + EE2 - EF*pos(m,4)*pos(m,3)/2.D0*2
+    q_total = q_total + pos(m,4)**2
   end do
   call cpu_time(fn)
   ft = fn - st
@@ -347,8 +353,10 @@ subroutine energy_lookup_table(EE, rt, ft)
   !
   !modified term of slab geometry
   EE = EE/2 + 2*pi/(Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
+
+  EE = EE - sqrt(alpha2/pi)*q_total
+
 !   write(*,*) 'coulomb energy with modification', EE
-!   stop
 
 end subroutine energy_lookup_table
 
@@ -735,11 +743,11 @@ subroutine Delta_Energy(DeltaE)
         x = pos_ip0(1) - pos(k,1)
         y = pos_ip0(2) - pos(k,2)
         z = pos_ip0(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
+        x = periodic_x(x)
+        y = periodic_y(y)
         z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE1=EE1+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE1=EE1+pos(k,4)*real_ij(x,y,z)
         end if
       end if
       j = cell_list_r(j)
@@ -763,11 +771,11 @@ subroutine Delta_Energy(DeltaE)
         x = pos_ip1(1) - pos(k,1)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
+        x = periodic_x(x)
+        y = periodic_y(y)
         z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE2=EE2+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE2=EE2+pos(k,4)*real_ij(x,y,z)
         end if
       end if
       j = cell_list_r(j)
@@ -808,13 +816,13 @@ subroutine Delta_Energy_add(DeltaE)
   do while (j/=0)
     k = charge(j)
     EE1 = EE1 + pos(k,4)*fourier_ij( &
-          fourier_x( pos_ip0(1) - pos(k,1) ) + &
-          fourier_y( pos_ip0(2) - pos(k,2) ) + &
-          fourier_z( pos_ip0(3) - pos(k,3) ) )
-    EE2 = EE2 + pos(k,4)*fourier_ij( &
           fourier_x( pos_ip1(1) - pos(k,1) ) + &
           fourier_y( pos_ip1(2) - pos(k,2) ) + &
           fourier_z( pos_ip1(3) - pos(k,3) ) )
+    EE2 = EE2 + pos(k,4)*fourier_ij( &
+          fourier_x( pos_ip1i(1) - pos(k,1) ) + &
+          fourier_y( pos_ip1i(2) - pos(k,2) ) + &
+          fourier_z( pos_ip1i(3) - pos(k,3) ) )
     j = cell_list_q(j)
   end do
 
@@ -837,11 +845,11 @@ subroutine Delta_Energy_add(DeltaE)
       x = pos_ip1(1) - pos(k,1)
       y = pos_ip1(2) - pos(k,2)
       z = pos_ip1(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
+      x = periodic_x(x)
+      y = periodic_y(y)
       z = Periodic_z(z)
       if ((x*x+y*y+z*z)<rcc2) then
-        EE1 = EE1 + pos_ip1(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+        EE1=EE1+pos(k,4)*real_ij(x,y,z)
       end if
       j = cell_list_r(j)
     end do
@@ -863,16 +871,16 @@ subroutine Delta_Energy_add(DeltaE)
       x = pos_ip1i(1) - pos(k,1)
       y = pos_ip1i(2) - pos(k,2)
       z = pos_ip1i(3) - pos(k,3)
-      x = Periodic_x(x)
-      y = Periodic_y(y)
+      x = periodic_x(x)
+      y = periodic_y(y)
       z = Periodic_z(z)
       if ((x*x+y*y+z*z)<rcc2) then
-        EE2=EE2+pos_ip1i(4)*pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+        EE2=EE2+pos(k,4)*real_ij(x,y,z)
       end if
       j = cell_list_r(j)
     end do
   end do
-  EE2 = EE2 * qq1
+  EE2 = EE2 * qq2
   DeltaE = DeltaE + EE1 + EE2
 
   !
@@ -887,9 +895,9 @@ subroutine Delta_Energy_add(DeltaE)
   y = Periodic_y(y)
   z = Periodic_z(z)
   t = x1 + y1 + z1
-  DeltaE = DeltaE - qq1*qq2*fourier_ij(t)
+  DeltaE = DeltaE + qq1*qq2*fourier_ij(t)
   if (x*x+y*y+z*z<rcc2) then
-    DeltaE = DeltaE - qq1*qq2*real_ij(x,y,z)
+    DeltaE = DeltaE + qq1*qq2*real_ij(x,y,z)
   end if
   !
   !modified term of slab geometry
@@ -898,8 +906,9 @@ subroutine Delta_Energy_add(DeltaE)
 
   !
   !External field energy
-  DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
+  DeltaE=DeltaE-EF*pos_ip1i(4)*pos_ip1i(3)/2.D0-EF*pos_ip1(4)*pos_ip1(3)/2.D0
 
+  DeltaE = DeltaE - sqrt(alpha2/pi)*(pos_ip1(4)**2+pos_ip1i(4)**2)
 
 end subroutine Delta_Energy_add
 
@@ -914,7 +923,7 @@ subroutine Delta_Energy_delete(DeltaE)
 
   DeltaE = 0
   !
-  ! Fourier Space
+!   ! Fourier Space
   EE1 = 0
   EE2 = 0
   qq1 = pos_ip0(4)         !polymer
@@ -937,7 +946,7 @@ subroutine Delta_Energy_delete(DeltaE)
     j = cell_list_q(j)
   end do
 
-  DeltaE = EE1*qq1 + EE2*qq2
+  DeltaE = - EE1*qq1 - EE2*qq2
   if (abs(DeltaE)>1e10) then
     write(*,*) 'foureier'
     stop
@@ -960,17 +969,17 @@ subroutine Delta_Energy_delete(DeltaE)
         x = pos_ip1(1) - pos(k,1)
         y = pos_ip1(2) - pos(k,2)
         z = pos_ip1(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
+        x = periodic_x(x)
+        y = periodic_y(y)
         z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE1=EE1+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE1=EE1+pos(k,4)*real_ij(x,y,z)
         end if
       end if
       j = cell_list_r(j)
     end do
   end do
-  EE1 = EE1 * qq1
+  EE1 = -EE1 * qq1
 
   EE2 = 0
   icelx = int((pos_ip1i(1)-1)/clx)+1
@@ -988,17 +997,17 @@ subroutine Delta_Energy_delete(DeltaE)
         x = pos_ip1i(1) - pos(k,1)
         y = pos_ip1i(2) - pos(k,2)
         z = pos_ip1i(3) - pos(k,3)
-        x = Periodic_x(x)
-        y = Periodic_y(y)
+        x = periodic_x(x)
+        y = periodic_y(y)
         z = Periodic_z(z)
         if ((x*x+y*y+z*z)<rcc2) then
-          EE2=EE2+pos(k,4)*real_ij(periodic_x(x),periodic_y(y),Periodic_z(z))
+          EE2=EE2+pos(k,4)*real_ij(x,y,z)
         end if
       end if
       j = cell_list_r(j)
     end do
   end do
-  EE2 = EE2 * qq1
+  EE2 = -EE2 * qq2
   DeltaE = DeltaE + EE1 + EE2
   if (abs(DeltaE)>1e10) then
     write(*,*) 'real'
@@ -1016,9 +1025,9 @@ subroutine Delta_Energy_delete(DeltaE)
   y = Periodic_y(y)
   z = Periodic_z(z)
   t = x1 + y1 + z1
-  DeltaE = DeltaE - qq1*qq2*fourier_ij(t)
-  if (x*x+y*y+z*z<rcc2) then
-    DeltaE = DeltaE - qq1*qq2*real_ij(x,y,z)
+  DeltaE = DeltaE + qq1*qq2*fourier_ij(t)
+  if ((x*x+y*y+z*z)<rcc2) then
+    DeltaE = DeltaE + qq1*qq2*real_ij(x,y,z)
   end if 
   if (abs(DeltaE)>1e10) then
     write(*,*) 'inter',x,y,z,x1,y1,z1,pos_ip1i(1:3) - pos_ip1(1:3)
@@ -1027,21 +1036,13 @@ subroutine Delta_Energy_delete(DeltaE)
   end if
   !
   !modified term of slab geometry
-  dMz = pos_ip0i(4)*pos_ip0i(3)/2.D0 + pos_ip0(4)*pos_ip0(3)/2.D0
+  dMz = - pos_ip0i(4)*pos_ip0i(3)/2.D0 - pos_ip0(4)*pos_ip0(3)/2.D0
   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
-  if (abs(DeltaE)>1e10) then
-    write(*,*) 'slab'
-    stop
-  end if
   !
   !External field energy
-  DeltaE = DeltaE - EF * pos_ip1i(4)*pos_ip1i(3) - EF * pos_ip1(4)*pos_ip1(3)
-  if (abs(DeltaE)>1e10) then
-    write(*,*) 'external'
-    stop
-  end if
+  DeltaE=DeltaE+EF * pos_ip0i(4)*pos_ip0i(3)/2.D0+EF*pos_ip0(4)*pos_ip0(3)/2.D0
 
-  DeltaE = -DeltaE
+  DeltaE = DeltaE + sqrt(alpha2/pi)*(qq1**2+qq2**2)
 
 end subroutine Delta_Energy_delete
 
@@ -1085,6 +1086,8 @@ subroutine update_cell_list_pH_add
 
   Mz = Mz + dMz
 
+  Nq_net = Nq_net + 1
+
 end subroutine update_cell_list_pH_add
 
 
@@ -1106,6 +1109,8 @@ subroutine update_cell_list_pH_delete
   call update_charge_cell_list_delete(ip1)
 
   Mz = Mz + dMz
+
+  Nq_net = Nq_net - 1
 
 end subroutine update_cell_list_pH_delete
 

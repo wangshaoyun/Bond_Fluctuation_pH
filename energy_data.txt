@@ -1,4 +1,4 @@
 3                   !lb
-1.D0                !EF
+0.D0                !EF
 2.5D0               !tol
 40                  !tau_rf

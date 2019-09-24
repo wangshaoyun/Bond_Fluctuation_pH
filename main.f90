@@ -57,6 +57,7 @@ implicit none
         call write_physical_quantities( step )
       end if
       if ( mod(step,DeltaStep3) == 0 ) then
+        write(*,*) 'write data'
         call error_analysis(1, EE1)
         call write_energy(step,EE,EE1)
         call write_pos1(step)
