@@ -148,7 +148,7 @@ end subroutine initialize_energy_parameters_Ewald
 
 subroutine initialize_energy_arrays_ewald
   use global_variables
-  implicti none
+  implicit none
   !
   !
   if ( qq /= 0 ) then
@@ -360,14 +360,12 @@ subroutine Delta_Energy_Ewald(DeltaE)
   DeltaE = 0
   !
   !Compute Coulomb energy
-  if ( pos_ip0(4) /= 0 ) then
-    !
-    !Compute coulomb energy change in real space
-    call Delta_real_Energy(DeltaE)
-    !
-    !Compute coulomb energy change in reciprocal space
-    call Delta_Reciprocal_Energy(DeltaE)
-  end if 
+  !
+  !Compute coulomb energy change in real space
+  call Delta_real_Energy(DeltaE)
+  !
+  !Compute coulomb energy change in reciprocal space
+  call Delta_Reciprocal_Energy(DeltaE)
 
 end subroutine Delta_Energy_Ewald
 
@@ -396,14 +394,12 @@ subroutine Delta_Energy_Ewald_add(DeltaE)
   DeltaE = 0
   !
   !Compute Coulomb energy
-  if ( pos_ip0(4) /= 0 ) then
-    !
-    !Compute coulomb energy change in real space
-    call Delta_real_Energy_add(DeltaE)
-    !
-    !Compute coulomb energy change in reciprocal space
-    call Delta_Reciprocal_Energy_add(DeltaE)
-  end if 
+  !
+  !Compute coulomb energy change in real space
+  call Delta_real_Energy_add(DeltaE)
+  !
+  !Compute coulomb energy change in reciprocal space
+  call Delta_Reciprocal_Energy_add(DeltaE)
 
 end subroutine Delta_Energy_Ewald_add
 
@@ -431,15 +427,11 @@ subroutine Delta_Energy_Ewald_delete(DeltaE)
 
   DeltaE = 0
   !
-  !Compute Coulomb energy
-  if ( pos_ip0(4) /= 0 ) then
-    !
-    !Compute coulomb energy change in real space
-    call Delta_real_Energy_delete(DeltaE)
-    !
-    !Compute coulomb energy change in reciprocal space
-    call Delta_Reciprocal_Energy_delete(DeltaE)
-  end if 
+  !Compute coulomb energy change in real space
+  call Delta_real_Energy_delete(DeltaE)
+  !
+  !Compute coulomb energy change in reciprocal space
+  call Delta_Reciprocal_Energy_delete(DeltaE)
 
 end subroutine Delta_Energy_Ewald_delete
 
@@ -538,7 +530,7 @@ subroutine Delta_real_Energy(DeltaE)
 end subroutine Delta_real_Energy
 
 
-subroutine Delta_real_Energy_add
+subroutine Delta_real_Energy_add(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
@@ -625,7 +617,7 @@ subroutine Delta_real_Energy_add
 end subroutine Delta_real_Energy_add
 
 
-subroutine Delta_real_Energy_delete
+subroutine Delta_real_Energy_delete(DeltaE)
   use global_variables
   implicit none
   real*8, intent(out) :: DeltaE
@@ -813,7 +805,9 @@ subroutine Delta_Reciprocal_Energy(DeltaE)
 end subroutine Delta_Reciprocal_Energy
 
 
-subroutine Delta_Reciprocal_Energy_add
+subroutine Delta_Reciprocal_Energy_add(DeltaE)
+  use global_variables
+  implicit none
   real*8, intent(inout) :: DeltaE
   real*8  :: Del_Recip_erg
   complex(kind=8) :: eikx0( -Kmax1:Kmax1 ), eikx1( -Kmax1:Kmax1 )
@@ -871,7 +865,7 @@ subroutine Delta_Reciprocal_Energy_add
 
   do i=1, K_total
     ord = totk_vectk(i,1:3)
-    eirk0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
+    eikr0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
     eikr1 = eikx1(ord(1)) * eiky1(ord(2)) * eikz1(ord(3))
     delta_rhok(i) = eikr1 - eikr0
     delta_cosk(i) = 1 - real( conjg(eikr1) * eikr0 )
@@ -884,7 +878,8 @@ subroutine Delta_Reciprocal_Energy_add
 end subroutine Delta_Reciprocal_Energy_add
 
 
-subroutine Delta_Reciprocal_Energy_delete
+subroutine Delta_Reciprocal_Energy_delete(DeltaE)
+  use global_variables
   real*8, intent(inout) :: DeltaE
   real*8  :: Del_Recip_erg
   complex(kind=8) :: eikx0( -Kmax1:Kmax1 ), eikx1( -Kmax1:Kmax1 )
@@ -942,7 +937,7 @@ subroutine Delta_Reciprocal_Energy_delete
 
   do i=1, K_total
     ord = totk_vectk(i,1:3)
-    eirk0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
+    eikr0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
     eikr1 = eikx1(ord(1)) * eiky1(ord(2)) * eikz1(ord(3))
     delta_rhok(i) = - eikr1 + eikr0
     delta_cosk(i) = 1 - real( conjg(eikr1) * eikr0 )
@@ -963,12 +958,12 @@ subroutine update_real_cell_list_Ewald
   icelx = int((pos_ip0(1)-1)/clx)+1
   icely = int((pos_ip0(2)-1)/cly)+1
   icelz = int((pos_ip0(3)-1)/clz)+1
-  call update_real_cell_list_delete(ip,icelx,icely,icelz)
+  call update_real_cell_list_delete_Ewald(ip,icelx,icely,icelz)
 
   icelx = int((pos_ip1(1)-1)/clx)+1
   icely = int((pos_ip1(2)-1)/cly)+1
   icelz = int((pos_ip1(3)-1)/clz)+1
-  call update_real_cell_list_add(ip,icelx,icely,icelz)
+  call update_real_cell_list_add_Ewald(ip,icelx,icely,icelz)
 
   Mz = Mz + dMz
 
@@ -983,14 +978,14 @@ subroutine update_cell_list_pH_add_Ewald
   icelx = int((pos_ip1(1)-1)/clx)+1
   icely = int((pos_ip1(2)-1)/cly)+1
   icelz = int((pos_ip1(3)-1)/clz)+1
-  call update_real_cell_list_add(ip,icelx,icely,icelz)
-  call update_charge_cell_list_add(ip)
+  call update_real_cell_list_add_Ewald(ip,icelx,icely,icelz)
+  call update_charge_cell_list_add_Ewald(ip)
 
   icelx = int((pos_ip1i(1)-1)/clx)+1
   icely = int((pos_ip1i(2)-1)/cly)+1
   icelz = int((pos_ip1i(3)-1)/clz)+1
-  call update_real_cell_list_add(ip1,icelx,icely,icelz)
-  call update_charge_cell_list_add(ip1)
+  call update_real_cell_list_add_Ewald(ip1,icelx,icely,icelz)
+  call update_charge_cell_list_add_Ewald(ip1)
 
   Mz = Mz + dMz
 
@@ -1007,14 +1002,14 @@ subroutine update_cell_list_pH_delete_Ewald
   icelx = int((pos_ip0(1)-1)/clx)+1
   icely = int((pos_ip0(2)-1)/cly)+1
   icelz = int((pos_ip0(3)-1)/clz)+1
-  call update_real_cell_list_delete(ip,icelx,icely,icelz)
-  call update_charge_cell_list_delete(ip)
+  call update_real_cell_list_delete_Ewald(ip,icelx,icely,icelz)
+  call update_charge_cell_list_delete_Ewald(ip)
 
   icelx = int((pos_ip0i(1)-1)/clx)+1
   icely = int((pos_ip0i(2)-1)/cly)+1
   icelz = int((pos_ip0i(3)-1)/clz)+1 
-  call update_real_cell_list_delete(ip1,icelx,icely,icelz)
-  call update_charge_cell_list_delete(ip1)
+  call update_real_cell_list_delete_Ewald(ip1,icelx,icely,icelz)
+  call update_charge_cell_list_delete_Ewald(ip1)
 
   Mz = Mz + dMz
 
@@ -1185,9 +1180,9 @@ subroutine error_analysis_ewald(EE1)
   real*8, intent(out) :: EE1
   integer i,j,m
 
-  tol = 5                
+!   tol = 5                
 
-  call Coulomb_energy(EE1)
+  call total_energy_ewald(EE1,tm1,tm2)
 
 end subroutine error_analysis_ewald
 

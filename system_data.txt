@@ -5,10 +5,10 @@
 -1              ! qq: charge of PE
 3               ! qqi: charge of salt ion
 1               ! ion_ratio
-1               ! arm: number of arm in star brushes
-100              ! Nma: number of monomers of each arm
+2               ! arm: number of arm in star brushes
+50              ! Nma: number of monomers of each arm
 36              ! Nga: grafting number of star brushes
-1               ! man_s: Manning effect : every 'man' particle have one charge
+5               ! man_s: Manning effect : every 'man' particle have one charge
 200000            ! StepNum0
 200000          ! StepNum:  steps of running
 20              ! DeltaStep: interval of pH move

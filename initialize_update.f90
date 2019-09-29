@@ -237,7 +237,7 @@ subroutine error_analysis(n, EE)
 !   call energy_ewald_module(n, EE1)
 
   EE1=0
-  call energy_lookup_table(EE2, real_time, fourier_time)
+  call total_energy_ewald(EE2, real_time, fourier_time)
 
   write(*,*) 'EE',EE2
 
@@ -305,10 +305,10 @@ call cpu_time(st)
       end if
     else
       call choose_particle
-!       call total_energy_ewald(EE1, real_time, fourier_time)
+      call total_energy_ewald(EE1, real_time, fourier_time)
       call new_position(EE,DeltaE)
-!       call total_energy_ewald(EE2, real_time, fourier_time)
-!       write(*,*) 'move',EE2-EE1,DeltaE,EE2,EE,ip
+      call total_energy_ewald(EE2, real_time, fourier_time)
+      write(*,*) 'move',EE2-EE1,DeltaE,EE2,EE,ip
     end if
   end do
 call cpu_time(fn)
@@ -337,6 +337,7 @@ end subroutine choose_particle
 
 subroutine choose_particle_pH
   use global_variables
+  use compute_energy_ewald
   implicit none
   real*8 :: rnd
   integer :: i

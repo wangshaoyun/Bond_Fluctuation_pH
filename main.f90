@@ -1,7 +1,7 @@
 program main
 use global_variables
 use initialize_update
-use compute_energy
+use compute_energy_ewald
 use input_output
 implicit none
 
