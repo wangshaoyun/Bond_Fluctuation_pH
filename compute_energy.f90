@@ -354,7 +354,7 @@ subroutine energy_lookup_table(EE, rt, ft)
   !modified term of slab geometry
   EE = EE/2 + 2*pi/(Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
 
-  EE = EE - sqrt(alpha2/pi)*q_total
+  EE = EE - sqrt(alpha2/pi)*q_total*lb/Beta
 
 !   write(*,*) 'coulomb energy with modification', EE
 
@@ -908,7 +908,7 @@ subroutine Delta_Energy_add(DeltaE)
   !External field energy
   DeltaE=DeltaE-EF*pos_ip1i(4)*pos_ip1i(3)/2.D0-EF*pos_ip1(4)*pos_ip1(3)/2.D0
 
-  DeltaE = DeltaE - sqrt(alpha2/pi)*(pos_ip1(4)**2+pos_ip1i(4)**2)
+  DeltaE = DeltaE - sqrt(alpha2/pi)*(pos_ip1(4)**2+pos_ip1i(4)**2)*lb/Beta
 
 end subroutine Delta_Energy_add
 
@@ -1042,7 +1042,7 @@ subroutine Delta_Energy_delete(DeltaE)
   !External field energy
   DeltaE=DeltaE+EF * pos_ip0i(4)*pos_ip0i(3)/2.D0+EF*pos_ip0(4)*pos_ip0(3)/2.D0
 
-  DeltaE = DeltaE + sqrt(alpha2/pi)*(qq1**2+qq2**2)
+  DeltaE = DeltaE + sqrt(alpha2/pi)*(qq1**2+qq2**2)*lb/Beta
 
 end subroutine Delta_Energy_delete
 
