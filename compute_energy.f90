@@ -322,12 +322,9 @@ subroutine energy_lookup_table(EE, rt, ft)
   EE=EE
   call cpu_time(fn)
   rt = fn - st 
-!   EE1 = EE
-!   write(*,*) 'real energy', EE, rt
   !
   !fourier space
   call cpu_time(st)
-!   write(*,*) size(fourier_ij)
   q_total = 0
   do i = 1, Nq
     m = charge(i)
@@ -348,15 +345,11 @@ subroutine energy_lookup_table(EE, rt, ft)
   end do
   call cpu_time(fn)
   ft = fn - st
-!   write(*,*) 'fourier energy', EE-EE1,ft
-!   write(*,*) 'coulomb energy', EE,Mz
   !
   !modified term of slab geometry
   EE = EE/2 + 2*pi/(Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
 
   EE = EE - sqrt(alpha2/pi)*q_total
-
-!   write(*,*) 'coulomb energy with modification', EE
 
 end subroutine energy_lookup_table
 
@@ -918,7 +911,7 @@ subroutine Delta_Energy_delete(DeltaE)
   implicit none
   real*8, intent(out) :: DeltaE
   integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
-  real*8 :: EE1,EE2,rr
+  real*8 :: EE1,EE2
   real*8, dimension(3) :: rij
 
   DeltaE = 0

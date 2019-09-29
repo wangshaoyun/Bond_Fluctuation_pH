@@ -227,7 +227,7 @@ end subroutine initialize_ions
 
 subroutine error_analysis(n, EE)
   use global_variables
-  use compute_energy
+  use compute_energy_ewald
   implicit none
   integer, intent(in) :: n
   real*8, intent(out) :: EE
@@ -279,7 +279,7 @@ end subroutine error_analysis
 
 subroutine monte_carlo_move( EE, DeltaE )
   use global_variables
-  use compute_energy
+  use compute_energy_ewald
   implicit none
   real*8, intent(inout) :: EE
   real*8, intent(out) :: DeltaE
@@ -337,7 +337,6 @@ end subroutine choose_particle
 
 subroutine choose_particle_pH
   use global_variables
-  use compute_energy
   implicit none
   real*8 :: rnd
   integer :: i
@@ -352,7 +351,7 @@ end subroutine choose_particle_pH
 
 subroutine add_particle(EE,DeltaE)
   use global_variables
-  use compute_energy
+  use compute_energy_ewald
   implicit none
   real*8, intent(inout) :: EE
   real*8, intent(out) :: DeltaE
@@ -385,7 +384,7 @@ subroutine add_particle(EE,DeltaE)
   total = latt(xi,yi,zi)+latt(xi,yi,zp)+latt(xi,yp,zi)+latt(xi,yp,zp) +   &
           latt(xp,yi,zi)+latt(xp,yi,zp)+latt(xp,yp,zi)+latt(xp,yp,zp)
   if (total == 0) then
-    call Delta_Energy_add(DeltaE)
+    call Delta_Energy_Ewald_add(DeltaE)
     if ((DeltaE+U_prot)<0) then
       latt(xi,yi,zi) = 1
       latt(xi,yi,zp) = 1
@@ -425,7 +424,7 @@ end subroutine add_particle
 
 subroutine delete_particle(EE, DeltaE)
   use global_variables
-  use compute_energy
+  use compute_energy_ewald
   implicit none
   real*8, intent(inout) :: EE
   real*8, intent(out) :: DeltaE
@@ -447,7 +446,7 @@ subroutine delete_particle(EE, DeltaE)
   yp = ipy(yi)
   zp = ipz(zi)
 
-  call Delta_Energy_delete(DeltaE)
+  call Delta_Energy_Ewald_delete(DeltaE)
   if ((DeltaE-U_prot)<0) then
     latt(xi,yi,zi) = 0
     latt(xi,yi,zp) = 0
@@ -486,7 +485,7 @@ end subroutine delete_particle
 
 subroutine new_position(EE, DeltaE)
   use global_variables
-  use compute_energy
+  use compute_energy_ewald
   implicit none
   real*8,  intent(out)   :: DeltaE
   real*8,  intent(inout) :: EE
@@ -538,7 +537,7 @@ subroutine new_position(EE, DeltaE)
                 latt(xp2,iy,zp1) + latt(xp2,yp1,zp1)
       if( testlat == 0 ) then
         if (pos_ip1(4)/=0) then
-          call Delta_Energy(DeltaE)
+          call Delta_Energy_Ewald(DeltaE)
         else
           DeltaE = 0
         end if
@@ -596,7 +595,7 @@ subroutine new_position(EE, DeltaE)
          &      latt(xm1,iy,zp1) + latt(xm1,yp1,zp1)
       if( testlat == 0 ) then
         if (pos_ip1(4)/=0) then
-          call Delta_Energy(DeltaE)
+          call Delta_Energy_Ewald(DeltaE)
         else
           DeltaE = 0
         end if
@@ -653,7 +652,7 @@ subroutine new_position(EE, DeltaE)
         &       latt(ix,yp2,zp1) + latt(xp1,yp2,zp1)
       if( testlat == 0 ) then
         if (pos_ip1(4)/=0) then
-          call Delta_Energy(DeltaE)
+          call Delta_Energy_Ewald(DeltaE)
         else
           DeltaE = 0
         end if
@@ -711,7 +710,7 @@ subroutine new_position(EE, DeltaE)
        &        latt(ix,ym1,zp1) + latt(xp1,ym1,zp1)
       if( testlat == 0 ) then
         if (pos_ip1(4)/=0) then
-          call Delta_Energy(DeltaE)
+          call Delta_Energy_Ewald(DeltaE)
         else
           DeltaE = 0
         end if
@@ -768,7 +767,7 @@ subroutine new_position(EE, DeltaE)
          &      latt(ix,yp1,zp2) + latt(xp1,yp1,zp2)
       if( testlat == 0 ) then
         if (pos_ip1(4)/=0) then
-          call Delta_Energy(DeltaE)
+          call Delta_Energy_Ewald(DeltaE)
         else
           DeltaE = 0
         end if
@@ -826,7 +825,7 @@ subroutine new_position(EE, DeltaE)
        &        latt(ix,yp1,zm1) + latt(xp1,yp1,zm1)
       if( testlat == 0 ) then
         if (pos_ip1(4)/=0) then
-          call Delta_Energy(DeltaE)
+          call Delta_Energy_Ewald(DeltaE)
         else
           DeltaE = 0
         end if

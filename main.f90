@@ -19,7 +19,7 @@ implicit none
   call initialize_parameters
   !
   !initialize energy and parameters of potential
-  call initialize_energy_parameter
+  call initialize_energy_parameters_ewald
   !
   ! restart or continue
   if (restart_or_continue == 0) then
@@ -32,7 +32,7 @@ implicit none
     call write_hist    
     !
     !initialize energy array related to pos array
-    call initialize_energy_arrays
+    call initialize_energy_arrays_ewald
     !
     !error analysis
     call error_analysis(0,EE)
@@ -42,7 +42,7 @@ implicit none
     call continue_read_data(i)
     !
     !initialize energy array related to pos array
-    call initialize_energy_arrays
+    call initialize_energy_arrays_ewald
     !
     !error analysis
     call error_analysis(0,EE)

@@ -20,6 +20,7 @@ module compute_energy_ewald
   real*8,  private :: Mz          !total dipole moment
   real*8,  private :: dMz         !delta Mz
   real*8,  private :: Mz_coef     !Coefficients in correction coulomb energy
+  real*8,  private :: err
   !
   !real space
   real*8,  private :: rcc         !Cut off radius of real space
@@ -33,10 +34,7 @@ module compute_energy_ewald
   !reciprocal space
   integer, private :: Kmax1       !max wave number of x direction
   integer, private :: Kmax2       !max wave number of y direction 
-  integer, private :: Kmax3       !max wave number of z direction
-  integer, private :: K1_half
-  integer, private :: K2_half  
-  integer, private :: K3_half   
+  integer, private :: Kmax3       !max wave number of z direction 
   integer, private :: K_total     !Total wave number in reciprocal space
 !##########end coefficient in potential function###########!
 
@@ -99,7 +97,7 @@ module compute_energy_ewald
 contains
 
 
-subroutine initialize_energy_parameters
+subroutine initialize_energy_parameters_Ewald
   !--------------------------------------!
   !Initial parameters are not inputted from file and compute
   !the total energy of the system.
@@ -120,22 +118,13 @@ subroutine initialize_energy_parameters
   implicit none
   !
   !read energy parameters from file
-  call read_energy_parameters
+  call read_energy_parameters_Ewald
   !
   !
   if ( qq /= 0 ) then
     !
     !Initialize ewald parameters and array allocate.
     call Initialize_ewald_parameters
-    !
-    !Construct the relation vector charge(Nq) of pos(NN,4)
-    !and posq(Nq,4). pos(NN,4) are known.
-    call build_charge
-    !
-    !Construct the real verlet list and real_point vector
-    if ( real_verlet == 1 ) then
-      call build_real_verlet_list
-    end if
     !
     !Construct the array totk_vectk(K_total,3), and allocate
     !rho_k(K_total), delta_rhok(K_total).
@@ -144,17 +133,149 @@ subroutine initialize_energy_parameters
     !Construct the coefficients vector in Fourier space
     call build_exp_ksqr
     !
+    !
+    call Periodic_array
+  end if
+
+end subroutine initialize_energy_parameters_Ewald
+
+
+subroutine initialize_energy_arrays_ewald
+  use global_variables
+  implicti none
+  !
+  !
+  if ( qq /= 0 ) then
+    !
+    !Initialize charge with lind list. From this subroutine, pos array is needed.
+    call Build_Charge_Ewald
+    !
+    !Initialize cell list of charge
+    call Initialize_cell_list_q_Ewald
+    !
+    !Initialize real cell list
+    call Initialize_real_cell_list_Ewald
+    !
     !Construct the structure factor rho_k
     call build_rho_k
   end if
-  !
-  !write energy parameters
-  call write_energy_parameters
 
-end subroutine initialize_energy_parameters
+  call write_energy_parameters_Ewald
+
+end subroutine initialize_energy_arrays_ewald
 
 
-subroutine total_energy (EE)
+subroutine Periodic_array
+  use global_variables
+  implicit none
+  integer :: i
+
+  allocate(periodic_x(-Lx2:Lx2))
+  allocate(periodic_y(-Ly2:Ly2))
+  allocate(periodic_z(-Lz2:Lz2))
+  allocate(fourier_x(-Lx2:Lx2))
+  allocate(fourier_y(-Ly2:Ly2))
+  allocate(fourier_z(-Lz2:Lz2))
+  Periodic_x = 0
+  Periodic_y = 0
+  periodic_z = 0
+  fourier_x = 0
+  fourier_y = 0
+  fourier_z = 0
+
+  if (mod(Lx2,2) == 0) then
+    do i = -Lx2, Lx2
+      if (i<-Lx2/2) then
+        periodic_x(i) = i + Lx2
+      elseif (i>=Lx2/2) then
+        periodic_x(i) = i - Lx2
+      else
+        periodic_x(i) = i
+      end if
+    end do
+  else
+    do i = -Lx2, Lx2
+      if (i<-Lx2/2) then
+        periodic_x(i) = i + Lx2
+      elseif (i>Lx2/2) then
+        periodic_x(i) = i - Lx2
+      else
+        periodic_x(i) = i
+      end if
+    end do
+  end if
+  do i = -Lx2, Lx2
+    if (Periodic_x(i)<0) then
+      periodic_x(i) = -Periodic_x(i)
+    end if
+  end do
+
+  if (mod(Ly2,2) == 0) then
+    do i = -Ly2, Ly2
+      if (i<-Ly2/2) then
+        periodic_y(i) = i + Ly2
+      elseif (i>=Ly2/2) then
+        periodic_y(i) = i - Ly2
+      else
+        Periodic_y(i) = i
+      end if
+    end do
+  else
+    do i = -Ly2, Ly2
+      if (i<-Ly2/2) then
+        periodic_y(i) = i + Ly2
+      elseif (i>Ly2/2) then
+        periodic_y(i) = i - Ly2
+      else
+        Periodic_y(i) = i
+      end if
+    end do
+  end if 
+  do i = -Ly2, Ly2
+    if (Periodic_y(i)<0) then
+      periodic_y(i) = -Periodic_y(i)
+    end if
+  end do
+
+  do i = -Lz2, Lz2
+    if (i>=0) then
+      Periodic_z(i) = i;
+    else
+      Periodic_z(i) = -i;
+    end if 
+  end do
+
+  do i = -Lx2, Lx2
+    fourier_x(i) = Periodic_x(i) + 1
+    fourier_x(i) = (fourier_x(i)-1)*(K2_half+1)*(Lz2+1)
+  end do
+
+  do i = -Ly2, Ly2
+    fourier_y(i) = Periodic_y(i) + 1
+    fourier_y(i) = (fourier_y(i)-1)*(Lz2+1)
+  end do
+
+  do i = -Lz2, Lz2
+    fourier_z(i) = Periodic_z(i) + 1
+  end do
+
+
+  open(120,file='./data/periodic_xy.txt')
+    do i = -Lx2, Lx2
+      write(120,*) i,periodic_x(i),Periodic_y(i),fourier_x(i),fourier_y(i)
+    end do
+  close(120)
+
+  open(121,file='./data/periodic_z.txt')
+    do i = -Lz2, Lz2
+      write(121,*) i,periodic_z(i),fourier_z(i)
+    end do
+  close(121)
+
+end subroutine Periodic_array
+
+
+subroutine total_energy_ewald(EE, rt, ft)
   !--------------------------------------!
   !
   !   
@@ -170,137 +291,82 @@ subroutine total_energy (EE)
   use global_variables
   implicit none
   real*8, intent(out) :: EE
+  real*8, intent(out) :: rt
+  real*8, intent(out) :: ft
+  integer :: i, j, k, l, m, n, x1, y1, z1, x, y, z, t
+  integer :: icelx, icely, icelz, ncel
+  real*8 :: st, fn, EE1, EE2,rr(4),q_total
 
-  EE=0
-
-  if ( qq /= 0 ) then
- 
-    call Coulomb_Energy(EE)
-
-    call Electrical_Energy(EE)
-
-  end if
-
-end subroutine total_energy
-
-
-subroutine Coulomb_energy ( EE )
-  !--------------------------------------!
-  !Compute Coulomb energy, including real space,
-  !reciprocal space, self energy and slab energy.
-  !   
-  !Input
-  !   EE
-  !Output
-  !   EE
-  !External Variables
-  !   real_point, real_pair_list, exp_ksqr, rho_k
-  !   Nq, alpha, Beta, lb
-  !Routine Referenced:
-  !1. rij_and_rr
-  !--------------------------------------!
-  use global_variables
-  implicit none
-  real*8, intent(inout) :: EE
-  integer :: i, j, k, l, m, n
-  real*8  :: Ec, rij(3), rr2, rr, ord(3)
-
-  Ec = 0
-  Mz = 0
-  if ( real_verlet == 1 ) then
-    do n = 1, Nq
-      i = charge(n)
-      if ( n == 1 ) then
-        k = 1
-        l = real_point(1)
-      else
-        k = real_point(n-1) + 1
-        l = real_point(n)
-      end if
-      do m = k, l
-        j = real_pair_list(m)
-        call rij_and_rr( rij, rr2, i, j )
-        if ( rr2 < rc_real*rc_real ) then
-          rr = sqrt( rr2 )
-          !
-          !Real space energy
-          Ec = Ec + posq(i,4) * posq(j,4) * erfc(alpha*rr) / rr / 2 
-        end if
-      end do
-      !z component of dipole moment
-      Mz = Mz + posq(i,4)*posq(i,3)
-      !
-      !Self energy
-      Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
-    end do
-  else
-    do m = 1, Nq-1
-      i = charge(m)
-      do n = m+1, Nq
-        j = charge(n)
-        call rij_and_rr( rij, rr2, i, j )
-        if ( rr2 < rc_real*rc_real ) then
-          rr = sqrt( rr2 )
-          !
-          !Real space energy
-          Ec = Ec + posq(i,4) * posq(j,4) * erfc(alpha*rr) / rr
-        end if
-      end do
-      !z component of dipole moment
-      Mz = Mz + posq(i,4)*posq(i,3)
-      !
-      !Self energy
-      Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
-    end do
-    i  = charge(Nq)
-    Mz = Mz + posq(i,4)*posq(i,3)
-    !
-    !Self energy
-    Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
-  end if 
+  EE = 0
   !
-  !Reciprocal space energy
-  EE = EE + Ec / Beta * lb + sum( exp_ksqr * real( conjg(rho_k) * rho_k ) ) / 2
-  !
-  !Correction energy of slab energy
-  Mz_coef = 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta
-  EE = EE + Mz_coef * Mz**2
-  
-end subroutine Coulomb_energy
-
-
-subroutine Electrical_energy(EE)
-  !--------------------------------------!
-  !Compute electric energy of external field.
-  !   
-  !Input
-  !   EE
-  !Output
-  !   EE
-  !External Variables
-  !   Nq
-  !Routine Referenced:
-  !1.
-  !--------------------------------------!
-  use global_variables
-  implicit none
-  real*8, intent(inout) :: EE
-  integer :: i, j
-
-  do j = 1, Nq
-
-    !
-    !EF is positive from bottom to top
-    !The potential at the bottom plate is zero.
-    i = charge(j)
-    EE = EE - EF * posq(i,3) * posq(i,4) 
-
+  !real space
+  call cpu_time(st)
+  do i = 1, Nq
+    m = charge(i)
+    EE1 = 0
+    icelx = int((pos(m,1)-1)/clx)+1
+    icely = int((pos(m,2)-1)/cly)+1
+    icelz = int((pos(m,3)-1)/clz)+1
+    ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+    do j = 1, cell_near_list(ncel,28,1)
+      icelx = cell_near_list(ncel,j,1)
+      icely = cell_near_list(ncel,j,2)
+      icelz = cell_near_list(ncel,j,3)
+      k = hoc_r(icelx,icely,icelz)
+      do while(k/=0)
+        l = charge(k)
+        if (l/=m) then
+          x = pos(m,1)-pos(l,1)
+          y = pos(m,2)-pos(l,2)
+          z = pos(m,3)-pos(l,3)
+          x = periodic_x(x)
+          y = periodic_y(y)
+          z = Periodic_z(z)
+          if ((x*x+y*y+z*z)<rcc2) then
+            EE1=EE1+pos(l,4)*real_ij(x,y,z)
+          end if
+        end if
+        k = cell_list_r(k)
+      end do
+    end do
+    EE = EE + EE1 * pos(m,4)
   end do
+  EE=EE
+  call cpu_time(fn)
+  rt = fn - st 
+  !
+  !fourier space
+  call cpu_time(st)
+  q_total = 0
+  do i = 1, Nq
+    m = charge(i)
+    EE2=0
+    x = pos(m,1)
+    y = pos(m,2)
+    z = pos(m,3)
+    do j = 1, Nq
+      n = charge(j)
+      if (m/=n) then  
+        EE2=EE2+pos(n,4)*fourier_ij( fourier_x(x - pos(n,1)) + &
+            fourier_y(y - pos(n,2)) + fourier_z(z - pos(n,3)) )
+      end if
+    end do
+    EE2= pos(m,4)*EE2
+    EE = EE + EE2 - EF*pos(m,4)*pos(m,3)/2.D0*2
+    q_total = q_total + pos(m,4)**2
+  end do
+  call cpu_time(fn)
+  ft = fn - st
+  !
+  !modified term of slab geometry
+  EE = EE/2 + 2*pi/(Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
 
-end subroutine Electrical_energy
+  EE = EE - sqrt(alpha2/pi)*q_total
+
+end subroutine total_energy_ewald
 
 
-subroutine Delta_Energy(DeltaE)
+subroutine Delta_Energy_Ewald(DeltaE)
   !--------------------------------------!
   !Compute change of energy.
   !   
@@ -323,14 +389,6 @@ subroutine Delta_Energy(DeltaE)
 
   DeltaE = 0
   !
-  !Compute energy of LJ potential
-  call Delta_LJ_Energy(DeltaE)
-  !
-  !Compute Delta energy of FENE potential
-  if ( ip <= Npe ) then
-    call Delta_FENE_Energy(DeltaE)
-  end if
-  !
   !Compute Coulomb energy
   if ( pos_ip0(4) /= 0 ) then
     !
@@ -339,15 +397,12 @@ subroutine Delta_Energy(DeltaE)
     !
     !Compute coulomb energy change in reciprocal space
     call Delta_Reciprocal_Energy(DeltaE)
-    !
-    !Compute electric energy change of external electric field
-    DeltaE = DeltaE - EF * pos_ip0(4) * ( pos_ip1(3) - pos_ip0(3) )
   end if 
 
-end subroutine Delta_Energy
+end subroutine Delta_Energy_Ewald
 
 
-subroutine Delta_Energy_time( DeltaE, time )
+subroutine Delta_Energy_Ewald_add(DeltaE)
   !--------------------------------------!
   !Compute change of energy.
   !   
@@ -366,44 +421,57 @@ subroutine Delta_Energy_time( DeltaE, time )
   !--------------------------------------!
   use global_variables
   implicit none
-  real*8, intent(out) :: DeltaE
-  real*8, dimension(3), intent(inout) :: time
-  real*8 :: st_lj, fn_lj, st_real, fn_real
-  real*8 :: st_Fourier, fn_Fourier
+  real*8,  intent(out) :: DeltaE
 
   DeltaE = 0
-  !
-  !Compute energy of LJ potential
-  call cpu_time(st_lj)
-  call Delta_LJ_Energy(DeltaE)
-  call cpu_time(fn_lj)
-  time(1) = time(1) + fn_lj - st_lj
-  !
-  !Compute Delta energy of FENE potential
-  if ( ip <= Npe ) then
-    call Delta_FENE_Energy(DeltaE)
-  end if
   !
   !Compute Coulomb energy
   if ( pos_ip0(4) /= 0 ) then
     !
     !Compute coulomb energy change in real space
-    call cpu_time(st_real)
     call Delta_real_Energy(DeltaE)
-    call cpu_time(fn_real)
-    time(2) = time(2) + fn_real - st_real
     !
     !Compute coulomb energy change in reciprocal space
-    call cpu_time(st_Fourier)
     call Delta_Reciprocal_Energy(DeltaE)
-    call cpu_time(fn_Fourier)
-    time(3) = time(3) + fn_Fourier - st_Fourier
-    !
-    !Compute electric energy change of external electric field
-    DeltaE = DeltaE - EF * pos_ip0(4) * ( pos_ip1(3) - pos_ip0(3) )
   end if 
 
-end subroutine Delta_Energy_time
+end subroutine Delta_Energy_Ewald_add
+
+
+subroutine Delta_Energy_Ewald_delete(DeltaE)
+  !--------------------------------------!
+  !Compute change of energy.
+  !   
+  !Input
+  !   
+  !Output
+  !   DeltaE
+  !External Variables
+  !   pos_ip0, pos_ip1, ip
+  !   inv_charge, DeltaE, EF
+  !Routine Referenced:
+  !1.Delta_LJ_Energy(DeltaE)
+  !2.Delta_FENE_Energy(DeltaE)
+  !3.Delta_real_Energy(DeltaE)
+  !4.Delta_Reciprocal_Energy(DeltaE)
+  !--------------------------------------!
+  use global_variables
+  implicit none
+  real*8,  intent(out) :: DeltaE
+
+  DeltaE = 0
+  !
+  !Compute Coulomb energy
+  if ( pos_ip0(4) /= 0 ) then
+    !
+    !Compute coulomb energy change in real space
+    call Delta_real_Energy(DeltaE)
+    !
+    !Compute coulomb energy change in reciprocal space
+    call Delta_Reciprocal_Energy(DeltaE)
+  end if 
+
+end subroutine Delta_Energy_Ewald_delete
 
 
 subroutine Delta_real_Energy(DeltaE)
@@ -428,120 +496,274 @@ subroutine Delta_real_Energy(DeltaE)
   use global_variables
   implicit none
   real*8, intent(inout) :: DeltaE
-  integer :: i, j, k, l, ipq
-  real*8  :: rr, rij(3), h_lx, h_ly, nh_lx, nh_ly
-  real*8  :: EE, dMz
+  real*8  :: rij(3)
+  real*8  :: EE1, EE2
+  integer :: i,j,k,x,y,z,x1,y1,z1,t,icelx,icely,icelz,ncel
 
-  EE=0
-  h_lx = Lx / 2
-  h_ly = Ly / 2
-  nh_lx = - h_lx
-  nh_ly = - h_ly
-  if ( real_verlet == 1 ) then
-    ipq = inv_charge(ip)
-    if ( ipq == 1 ) then
-      k = 1
-      l = real_point(1)
-    else
-      k = real_point(ipq-1) + 1
-      l = real_point(ipq)
-    end if
-    do j = k, l
-      i = real_pair_list(j)
-      !
-      !Energy of Coulomb potential of old configuration in real space
-      !
-      rij = posq(i,1:3) - pos_ip0(1:3)
-      !
-      !Periodic condition
-      if ( rij(1) > h_lx ) then
-        rij(1) = rij(1) - Lx
-      elseif ( rij(1) < nh_lx ) then
-        rij(1) = rij(1) + Lx
+  EE1 = 0
+  icelx = int((pos_ip0(1)-1)/clx)+1
+  icely = int((pos_ip0(2)-1)/cly)+1
+  icelz = int((pos_ip0(3)-1)/clz)+1
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip) then
+        x = pos_ip0(1) - pos(k,1)
+        y = pos_ip0(2) - pos(k,2)
+        z = pos_ip0(3) - pos(k,3)
+        x = periodic_x(x)
+        y = periodic_y(y)
+        z = Periodic_z(z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE1=EE1+pos(k,4)*real_ij(x,y,z)
+        end if
       end if
-      if ( rij(2) > h_ly ) then
-        rij(2) = rij(2) - Ly
-      elseif ( rij(2) < nh_ly ) then
-        rij(2) = rij(2) + Ly
-      end if
-      rr = rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3)
-      if ( rr < rc_real2 ) then
-        rr = sqrt(rr)
-        EE = EE - posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
-      end if
-      !
-      !Energy of Coulomb potential of new configuration in real space
-      !
-      rij = posq(i,1:3) - pos_ip1(1:3)
-      !
-      !Periodic condition
-      if ( rij(1) > h_lx ) then
-        rij(1) = rij(1) - Lx
-      elseif ( rij(1) < nh_lx ) then
-        rij(1) = rij(1) + Lx
-      end if
-      if ( rij(2) > h_ly ) then
-        rij(2) = rij(2) - Ly
-      elseif ( rij(2) < nh_ly ) then
-        rij(2) = rij(2) + Ly
-      end if
-      rr = rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3)
-      if ( rr < rc_real2 ) then
-        rr = sqrt(rr)
-        EE = EE + posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
-      end if
+      j = cell_list_r(j)
     end do
-  else 
-    do j = 1, Nq
-      i = charge(j)
-      if ( i == ip ) cycle
-      !
-      !Energy of Coulomb potential of old configuration in real space
-      !
-      rij = posq(i,1:3) - pos_ip0(1:3)
-      !
-      !Periodic condition
-      if ( rij(1) > h_lx ) then
-        rij(1) = rij(1) - Lx
-      elseif ( rij(1) < nh_lx ) then
-        rij(1) = rij(1) + Lx
-      end if
-      if ( rij(2) > h_ly ) then
-        rij(2) = rij(2) - Ly
-      elseif ( rij(2) < nh_ly ) then
-        rij(2) = rij(2) + Ly
-      end if
-      rr = sqrt( rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3) )
-      EE = EE - posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
-      !
-      !Energy of Coulomb potential of new configuration in real space
-      !
-      rij = posq(i,1:3) - pos_ip1(1:3)
-      !
-      !Periodic condition
-      if ( rij(1) > h_lx ) then
-        rij(1) = rij(1) - Lx
-      elseif ( rij(1) < nh_lx ) then
-        rij(1) = rij(1) + Lx
-      end if
-      if ( rij(2) > h_ly ) then
-        rij(2) = rij(2) - Ly
-      elseif ( rij(2) < nh_ly ) then
-        rij(2) = rij(2) + Ly
-      end if
-      rr = sqrt( rij(1) * rij(1) + rij(2) * rij(2) + rij(3) * rij(3) )
-      EE = EE + posq(i,4) * pos_ip0(4) * erfc(alpha * rr) / rr
-    end do
-  end if
+  end do
+  EE1 = EE1 * pos_ip1(4)
 
-  dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))
+  EE2 = 0
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip) then
+        x = pos_ip1(1) - pos(k,1)
+        y = pos_ip1(2) - pos(k,2)
+        z = pos_ip1(3) - pos(k,3)
+        x = periodic_x(x)
+        y = periodic_y(y)
+        z = Periodic_z(z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE2=EE2+pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+      j = cell_list_r(j)
+    end do
+  end do
+  EE2 = EE2 * pos_ip1(4)
+  DeltaE = DeltaE + EE2 - EE1
+
   !
   !Change of correction energy in slab geometry
+  dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))/2.D0
   DeltaE = DeltaE +  lB/Beta * EE + Mz_coef * (2*Mz*dMz + dMz*dMz)
 
-  Mz = Mz + dMz
+  !
+  ! External field energy
+  DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
 
 end subroutine Delta_real_Energy
+
+
+subroutine Delta_real_Energy_add
+  use global_variables
+  implicit none
+  real*8, intent(out) :: DeltaE
+  integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
+  real*8 :: EE1,EE2
+  real*8, dimension(3) :: rij
+
+  DeltaE = 0
+  EE1 = 0
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      x = pos_ip1(1) - pos(k,1)
+      y = pos_ip1(2) - pos(k,2)
+      z = pos_ip1(3) - pos(k,3)
+      x = periodic_x(x)
+      y = periodic_y(y)
+      z = Periodic_z(z)
+      if ((x*x+y*y+z*z)<rcc2) then
+        EE1=EE1+pos(k,4)*real_ij(x,y,z)
+      end if
+      j = cell_list_r(j)
+    end do
+  end do
+  EE1 = EE1 * qq1
+
+  EE2 = 0
+  icelx = int((pos_ip1i(1)-1)/clx)+1
+  icely = int((pos_ip1i(2)-1)/cly)+1
+  icelz = int((pos_ip1i(3)-1)/clz)+1
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      x = pos_ip1i(1) - pos(k,1)
+      y = pos_ip1i(2) - pos(k,2)
+      z = pos_ip1i(3) - pos(k,3)
+      x = periodic_x(x)
+      y = periodic_y(y)
+      z = Periodic_z(z)
+      if ((x*x+y*y+z*z)<rcc2) then
+        EE2=EE2+pos(k,4)*real_ij(x,y,z)
+      end if
+      j = cell_list_r(j)
+    end do
+  end do
+  EE2 = EE2 * qq2
+  DeltaE = DeltaE + EE1 + EE2
+
+  !
+  !interaction of the added two particles
+  x = pos_ip1i(1) - pos_ip1(1)
+  y = pos_ip1i(2) - pos_ip1(2)
+  z = pos_ip1i(3) - pos_ip1(3)
+  x1 = fourier_x(x)
+  y1 = fourier_y(y)
+  z1 = fourier_z(z)
+  x = Periodic_x(x)
+  y = Periodic_y(y)
+  z = Periodic_z(z)
+  t = x1 + y1 + z1
+  DeltaE = DeltaE + qq1*qq2*fourier_ij(t)
+  if (x*x+y*y+z*z<rcc2) then
+    DeltaE = DeltaE + qq1*qq2*real_ij(x,y,z)
+  end if
+  !
+  !modified term of slab geometry
+  dMz = pos_ip1i(4)*pos_ip1i(3)/2.D0 + pos_ip1(4)*pos_ip1(3)/2.D0
+  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+
+  !
+  !External field energy
+  DeltaE=DeltaE-EF*pos_ip1i(4)*pos_ip1i(3)/2.D0-EF*pos_ip1(4)*pos_ip1(3)/2.D0
+
+  DeltaE = DeltaE - sqrt(alpha2/pi)*(pos_ip1(4)**2+pos_ip1i(4)**2)
+
+end subroutine Delta_real_Energy_add
+
+
+subroutine Delta_real_Energy_delete
+  use global_variables
+  implicit none
+  real*8, intent(out) :: DeltaE
+  integer :: i,j,k,x,y,z,x1,y1,z1,t,qq1,qq2,icelx,icely,icelz,ncel
+  real*8 :: EE1,EE2
+  real*8, dimension(3) :: rij
+
+  DeltaE = 0
+  !
+  ! Real Space
+  EE1 = 0
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip) then
+        x = pos_ip1(1) - pos(k,1)
+        y = pos_ip1(2) - pos(k,2)
+        z = pos_ip1(3) - pos(k,3)
+        x = periodic_x(x)
+        y = periodic_y(y)
+        z = Periodic_z(z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE1=EE1+pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+      j = cell_list_r(j)
+    end do
+  end do
+  EE1 = -EE1 * qq1
+
+  EE2 = 0
+  icelx = int((pos_ip1i(1)-1)/clx)+1
+  icely = int((pos_ip1i(2)-1)/cly)+1
+  icelz = int((pos_ip1i(3)-1)/clz)+1 
+  ncel = (icelx-1)*ncly*nclz+(icely-1)*nclz+icelz
+  do i = 1, cell_near_list(ncel,28,1)
+    icelx = cell_near_list(ncel,i,1)
+    icely = cell_near_list(ncel,i,2)
+    icelz = cell_near_list(ncel,i,3)   
+    j = hoc_r(icelx,icely,icelz) 
+    do while (j/=0) 
+      k = charge(j)
+      if (k/=ip1) then
+        x = pos_ip1i(1) - pos(k,1)
+        y = pos_ip1i(2) - pos(k,2)
+        z = pos_ip1i(3) - pos(k,3)
+        x = periodic_x(x)
+        y = periodic_y(y)
+        z = Periodic_z(z)
+        if ((x*x+y*y+z*z)<rcc2) then
+          EE2=EE2+pos(k,4)*real_ij(x,y,z)
+        end if
+      end if
+      j = cell_list_r(j)
+    end do
+  end do
+  EE2 = -EE2 * qq2
+  DeltaE = DeltaE + EE1 + EE2
+  if (abs(DeltaE)>1e10) then
+    write(*,*) 'real'
+    stop
+  end if
+  !
+  !interaction of the added two particles
+  x = pos_ip1i(1) - pos_ip1(1)
+  y = pos_ip1i(2) - pos_ip1(2)
+  z = pos_ip1i(3) - pos_ip1(3)
+  x1 = fourier_x(x)
+  y1 = fourier_y(y)
+  z1 = fourier_z(z)
+  x = Periodic_x(x)
+  y = Periodic_y(y)
+  z = Periodic_z(z)
+  t = x1 + y1 + z1
+  DeltaE = DeltaE + qq1*qq2*fourier_ij(t)
+  if ((x*x+y*y+z*z)<rcc2) then
+    DeltaE = DeltaE + qq1*qq2*real_ij(x,y,z)
+  end if 
+  if (abs(DeltaE)>1e10) then
+    write(*,*) 'inter',x,y,z,x1,y1,z1,pos_ip1i(1:3) - pos_ip1(1:3)
+    write(*,*) fourier_ij(t),real_ij(x,y,z)
+    stop
+  end if
+  !
+  !modified term of slab geometry
+  dMz = - pos_ip0i(4)*pos_ip0i(3)/2.D0 - pos_ip0(4)*pos_ip0(3)/2.D0
+  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+  !
+  !External field energy
+  DeltaE=DeltaE+EF * pos_ip0i(4)*pos_ip0i(3)/2.D0+EF*pos_ip0(4)*pos_ip0(3)/2.D0
+
+  DeltaE = DeltaE + sqrt(alpha2/pi)*(qq1**2+qq2**2)
+
+end subroutine Delta_real_Energy_delete
 
 
 subroutine Delta_Reciprocal_Energy(DeltaE)  
@@ -637,6 +859,106 @@ subroutine Delta_Reciprocal_Energy(DeltaE)
 end subroutine Delta_Reciprocal_Energy
 
 
+subroutine Delta_Reciprocal_Energy_add
+  real*8, intent(inout) :: DeltaE
+  real*8  :: Del_Recip_erg
+  complex(kind=8) :: eikx1( -Kmax1:Kmax1 )
+  complex(kind=8) :: eiky1( -Kmax2:Kmax2 )
+  complex(kind=8) :: eikz1( 0:Kmax3 )
+  complex(kind=8) :: eikr1
+  real*8  :: c1, c2, c3
+  integer :: ord(3), i, p, q, r
+
+  c1 = 2*pi / Lx
+  c2 = 2*pi / Ly
+  c3 = 2*pi / (Lz*Z_empty)
+
+  eikx1(0)  = ( 1,0 )
+  eiky1(0)  = ( 1,0 )
+  eikz1(0)  = ( 1,0 )
+  eikx1(1)  = cmplx( cos( c1 * pos_ip1(1) ), sin( -c1 * pos_ip1(1) ), 8 )
+  eiky1(1)  = cmplx( cos( c2 * pos_ip1(2) ), sin( -c2 * pos_ip1(2) ), 8 )
+  eikz1(1)  = cmplx( cos( c3 * pos_ip1(3) ), sin( -c3 * pos_ip1(3) ), 8 )
+  eikx1(-1) = conjg( eikx1(1) )
+  eiky1(-1) = conjg( eiky1(1) )
+
+  do p=2, Kmax1
+    eikx1(p)  = eikx1(p-1) * eikx1(1)
+    eikx1(-p) = conjg( eikx1(p) )
+  end do
+  do q=2, Kmax2
+    eiky1(q)  = eiky1(q-1) * eiky1(1)
+    eiky1(-q) = conjg(eiky1(q))
+  end do
+  do r=2, Kmax3
+    eikz1(r)  = eikz1(r-1) * eikz1(1)
+  end do
+
+  do i=1, K_total
+    ord = totk_vectk(i,1:3)
+    eikr1 = eikx1(ord(1)) * eiky1(ord(2)) * eikz1(ord(3))
+    delta_rhok(i) = eikr1
+  end do
+
+  delta_rhok = delta_rhok * pos_ip0(4)
+
+  Del_Recip_erg=sum(exp_ksqr*(Real(rho_k*delta_rhok)+pos_ip0(4)*pos_ip0(4)))
+
+  DeltaE = DeltaE + Del_Recip_erg
+
+end subroutine Delta_Reciprocal_Energy_add
+
+
+subroutine Delta_Reciprocal_Energy_delete
+  real*8, intent(inout) :: DeltaE
+  real*8  :: Del_Recip_erg
+  complex(kind=8) :: eikx0( -Kmax1:Kmax1 ), eikx1( -Kmax1:Kmax1 )
+  complex(kind=8) :: eiky0( -Kmax2:Kmax2 ), eiky1( -Kmax2:Kmax2 )
+  complex(kind=8) :: eikz0( 0:Kmax3 ), eikz1( 0:Kmax3 )
+  complex(kind=8) :: eikr0, eikr1
+  real*8  :: c1, c2, c3
+  integer :: ord(3), i, p, q, r
+
+  c1 = 2*pi / Lx
+  c2 = 2*pi / Ly
+  c3 = 2*pi / (Lz*Z_empty)
+
+  eikx0(0)  = ( 1,0 )
+  eiky0(0)  = ( 1,0 )
+  eikz0(0)  = ( 1,0 )
+  eikx0(1)  = cmplx( cos( c1 * pos_ip0(1) ), sin( -c1 * pos_ip0(1) ), 8 )
+  eiky0(1)  = cmplx( cos( c2 * pos_ip0(2) ), sin( -c2 * pos_ip0(2) ), 8 )
+  eikz0(1)  = cmplx( cos( c3 * pos_ip0(3) ), sin( -c3 * pos_ip0(3) ), 8 )
+  eikx0(-1) = conjg( eikx0(1) )
+  eiky0(-1) = conjg( eiky0(1) )
+
+  do p = 2, Kmax1
+    eikx0(p)  = eikx0(p-1) * eikx0(1)
+    eikx0(-p) = conjg( eikx0(p) )
+  end do
+  do q = 2, Kmax2
+    eiky0(q)  = eiky0(q-1) * eiky0(1)
+    eiky0(-q) = conjg(eiky0(q))
+  end do
+  do r = 2, Kmax3
+    eikz0(r)  = eikz0(r-1) * eikz0(1)
+  end do
+
+  do i=1, K_total
+    ord = totk_vectk(i,1:3)
+    eikr0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
+    delta_rhok(i) = - eikr0
+  end do
+
+  delta_rhok = delta_rhok * pos_ip0(4)
+
+  Del_Recip_erg=sum(exp_ksqr*(Real(rho_k*delta_rhok)-pos_ip0(4)*pos_ip0(4)))
+
+  DeltaE = DeltaE + Del_Recip_erg
+
+end subroutine Delta_Reciprocal_Energy_delete
+
+
 subroutine error_analysis_ewald(EE1)
   !--------------------------------------!
   !
@@ -659,43 +981,12 @@ subroutine error_analysis_ewald(EE1)
 
   tol = 5                
 
-  do i = 1, NN
-    if (mod(Lx2,2)==0) then
-      if (pos(i,1)>=Lx2/2) then
-        posq(i,1) = ( pos(i,1) - Lx2 ) / 2.D0
-      elseif(pos(i,1)<-Lx2/2) then
-        posq(i,1) = ( pos(i,1) + Lx2 ) / 2.D0
-      end if
-    else
-      if (pos(i,2)>=Ly2/2) then
-        posq(i,2) = ( pos(i,2) - Ly2 ) / 2.D0
-      elseif(pos(i,2)<-Ly2/2) then
-        posq(i,2) = ( pos(i,2) + Ly2 ) / 2.D0
-      end if
-    end if
-    if (mod(Ly2,2)==0) then
-      if (pos(i,2)>=Ly2/2) then
-        posq(i,2) = ( pos(i,2) - Ly2 ) / 2.D0
-      elseif(pos(i,2)<-Ly2/2) then
-        posq(i,2) = ( pos(i,2) + Ly2 ) / 2.D0
-      end if
-    else
-      if (pos(i,2)>Ly2/2) then
-        posq(i,2) = ( pos(i,2) - Ly2 ) / 2.D0
-      elseif(pos(i,2)<-Ly2/2) then
-        posq(i,2) = ( pos(i,2) + Ly2 ) / 2.D0
-      end if
-    end if
-    posq(i,3) = pos(i,3) / 2.D0
-    posq(i,4) = pos(i,4)
-  end do
-
   call Coulomb_energy(EE1)
 
 end subroutine error_analysis_ewald
 
 
-subroutine read_energy_parameters
+subroutine read_energy_parameters_Ewald
   !--------------------------------------!
   !
   !--------------------------------------!
@@ -709,18 +1000,7 @@ subroutine read_energy_parameters
     read(100,*) tau_rf
   close(100)
 
-  epsilon = 1
-  sigma = 1
-  rc_lj = 1.12
-  rv_lj = 2
-  rsk_lj = 1
-  rsk_real = 1
-  R0_2 = 2.25
-  kFENE = 30
-
-  allocate(posq(NN,4))
-
-end subroutine read_energy_parameters
+end subroutine read_energy_parameters_Ewald
 
 
 subroutine write_energy_parameters
@@ -755,45 +1035,28 @@ subroutine Initialize_ewald_parameters
   implicit none
   real*8 :: rho, v_verlet
 
+  !
+  ! alpha and rcc
   alpha    = ( tau_rf * pi**3 * Nq / (Lx*Ly)**2/Lz/Z_empty ) ** (1.D0/6)
   alpha2   = alpha * alpha
-  rc_real  = tol / alpha
-  rc_real2 = rc_real * rc_real
-  rv_real  = rc_real + rsk_real
+  rcc  = tol / alpha * 2
+  rcc2 = rcc * rcc
+
   !
   !use verlet list in real space
-  if ( (int(Lx/rv_real) * int(Ly/rv_real) * int(Lz/rv_real)) > 27 ) then 
-    Kmax1 = ceiling(tol*Lx*alpha/pi)
-    Kmax2 = ceiling(tol*Ly*alpha/pi)
-    Kmax3 = ceiling(tol*Lz*Z_empty*alpha/pi)
-    real_verlet = 1
+  Kmax1 = ceiling(tol*Lx*alpha/pi)
+  Kmax2 = ceiling(tol*Ly*alpha/pi)
+  Kmax3 = ceiling(tol*Lz*Z_empty*alpha/pi)
+
   !
-  !don't use verlet list in real space
-  else
-    if ( Lx > Ly ) then
-      rc_real = Ly/2
-    else
-      rc_real = Lx/2
-    end if
-    rc_real2 = rc_real * rc_real
-    Kmax1    = ceiling(tol*tol/pi*Lx/rc_real)
-    Kmax2    = ceiling(tol*tol/pi*Ly/rc_real)
-    Kmax3    = ceiling(tol*tol/pi*Lz*Z_empty/rc_real)
-    alpha    = tol / rc_real
-    alpha2   = alpha * alpha
-    rv_real  = rc_real + rsk_real
-    real_verlet = 0
-  end if
-  !
-  !allocate verlet list of real space
-  if ( allocated(real_point) ) deallocate(real_point)
-  allocate( real_point(Nq) )
-  real_point = 0
-  rho = Nq / (Lx * Ly * Lz)
-  v_verlet = 8.D0/3 * pi * rv_real**3
-  if ( allocated(real_pair_list) ) deallocate(real_pair_list)
-  allocate( real_pair_list(25*Nq*ceiling(rho*v_verlet)) )
-  real_pair_list = 0
+  !Cell list parameters
+  nclx = int(Lx2/(rcc+1))     !cell numbers in x direction
+  ncly = int(Ly2/(rcc+1))
+  nclz = int(Lz2/(rcc+1))
+  clx = 1.D0*Lx2/nclx         !cell length    
+  cly = 1.D0*Ly2/ncly
+  clz = 1.D0*Lz2/nclz
+  Mz_coef = 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta
 
 end subroutine Initialize_ewald_parameters
 
@@ -806,18 +1069,48 @@ subroutine update_rhok
   implicit none
 
   rho_k = rho_k + Conjg( delta_rhok )
+
+  Mz = Mz + dMz
   
 end subroutine update_rhok
 
 
-subroutine build_charge
+subroutine pre_calculate_real_space
+  use global_variables
+  implicit none
+  integer :: i, j, k 
+  integer :: nnl, nn_half
+  real*8 :: rr, x, y, z
+
+  nnl = nint(rcc+1)    ! cut off length, lattice unit
+  if (allocated(real_ij)) deallocate(real_ij)
+  allocate( real_ij(0:nnl, 0:nnl, 0:nnl) )
+
+  do i = 0, nnl
+    do j = 0, nnl
+      do k = 0, nnl
+        x = i/2.D0                      !sigma unit
+        y = j/2.D0
+        z = k/2.D0
+        rr = sqrt(x*x+y*y+z*z)
+        real_ij(i,j,k) = erfc(alpha*rr)/rr
+      end do
+    end do
+  end do
+
+  real_ij = real_ij * lb / beta
+
+end subroutine pre_calculate_real_space
+
+
+subroutine Build_Charge_Ewald
   !--------------------------------------!
   !Initialize and charge.
   !   
   !Input
   !   pos
   !Output
-  !   charge
+  !   charge, inv_charge, Mz
   !External Variables
   !   pos, charge, NN, Nq
   !--------------------------------------!
@@ -825,20 +1118,158 @@ subroutine build_charge
   implicit none
   integer :: i, j
 
-  allocate( charge(Nq) )
-  allocate( inv_charge(NN) )
-  inv_charge = 0
-  
-  j=0
+  Mz = 0
+  if (allocated(charge)) deallocate(charge)
+  allocate(charge(Nq))
+  if (allocated(inv_charge)) deallocate(inv_charge)
+  allocate(inv_charge(NN))
+
+  j = 0
   do i = 1, NN
-    if ( pos( i, 4 ) /= 0 ) then
-      j             = j + 1
-      charge(j)     = i
-      inv_charge(i) = j
-    end if 
+    if ( pos(i,4) /= 0 ) then
+      j = j + 1
+      charge(j) = i
+      Mz = Mz + pos(i,4)*pos(i,3)/2.D0 !sigma unit
+    end if
   end do
 
-end subroutine build_charge
+  j = 0
+  do i = 1, NN
+    if ( pos(i,4) /= 0 ) then
+      j = j + 1
+      inv_charge(i) = j
+    else
+      inv_charge(i) = 0
+    end if
+  end do
+
+end subroutine Build_Charge_Ewald
+
+
+subroutine Initialize_cell_list_q
+  use global_variables
+  implicit none
+  integer :: i, j, k
+
+  allocate(cell_list_q(Nq+1))     ! the last one is head of the list
+  allocate(inv_cell_list_q(Nq+1)) ! the last one is the head of the list
+
+  !assume initial state, all particles are charged.
+  cell_list_q(Nq+1) = 0
+  do i = 1, Nq
+    cell_list_q(i) = cell_list_q(Nq+1)
+    cell_list_q(Nq+1) = i
+  end do
+
+  inv_cell_list_q(Nq+1) = 0
+  do i = Nq, 1, -1
+    inv_cell_list_q(i) = inv_cell_list_q(Nq+1)
+    inv_cell_list_q(Nq+1) = i
+  end do
+
+  open(112,file='./data/cell_list_q.txt')
+    do i = 1, Nq + 1
+      write(112,*) cell_list_q(i), inv_cell_list_q(i)
+    end do
+  close(112)
+
+end subroutine Initialize_cell_list_q
+
+
+subroutine Initialize_real_cell_list
+  use global_variables
+  implicit none
+  integer :: i, j, k, l, m, n, p, q, r, x, y, z
+  integer :: icelx, icely, icelz
+
+  !
+  ! maxium situation, (125,125,100), 6.2Mb RAM is needed.
+  allocate(hoc_r(nclx,ncly,nclz))
+  allocate(inv_hoc_r(nclx,ncly,nclz))
+  hoc_r = 0
+  inv_hoc_r = 0
+
+  allocate(cell_list_r(Nq))
+  allocate(inv_cell_list_r(Nq))
+  cell_list_r = 0
+  inv_cell_list_r = 0
+
+  do i = 1, Nq
+    j = charge(i)
+    icelx = int((pos(j,1)-1)/clx) + 1
+    icely = int((pos(j,2)-1)/cly) + 1
+    icelz = int((pos(j,3)-1)/clz) + 1
+    cell_list_r(i) = hoc_r(icelx,icely,icelz)
+    hoc_r(icelx,icely,icelz) = i
+  end do
+
+  do i = Nq, 1, -1
+    j = charge(i)
+    icelx = int((pos(j,1)-1)/clx) + 1
+    icely = int((pos(j,2)-1)/cly) + 1
+    icelz = int((pos(j,3)-1)/clz) + 1
+    inv_cell_list_r(i) = inv_hoc_r(icelx,icely,icelz)
+    inv_hoc_r(icelx,icely,icelz) = i
+  end do
+
+  !
+  ! maxium situation, (125*125*100,28,3), 500Mb RAM is needed.
+  allocate(cell_near_list(nclx*ncly*nclz,28,3))
+  cell_near_list = 0
+  m = 0
+  do i = 1, nclx
+    do j = 1, ncly
+      do k = 1, nclz
+        m = m + 1
+        n = 0
+        do p = -1, 1
+          do q = -1, 1
+            do r = -1, 1
+              x = i + p
+              y = j + q
+              z = k + r
+              if (z>0 .and. z<=nclz) then
+                n = n + 1
+                if (x>nclx) then
+                  x = x - nclx
+                elseif (x<=0) then
+                  x = x + nclx
+                end if
+                if (y>ncly) then
+                  y = y - ncly
+                elseif (y<=0) then
+                  y = y + ncly
+                end if
+                cell_near_list(m,n,1) = x
+                cell_near_list(m,n,2) = y
+                cell_near_list(m,n,3) = z
+              end if
+            end do
+          end do
+        end do
+        cell_near_list(m,28,1) = n
+      end do
+    end do
+  end do
+
+!   open(113,file='./data/cell_list_r.txt')
+!     do i = 1, Nq
+!       write(113,*) i, cell_list_r(i), inv_cell_list_r(i)
+!     end do
+!   close(113)
+
+
+!   open(100,file='./data/hoc_r.txt')
+!     do i = 1, nclx
+!       do j = 1, ncly
+!         do k = 1, nclz
+!          write(100,*) i,j,k,hoc_r(i,j,k),inv_hoc_r(i,j,k)
+!         end do
+!       end do
+!     end do
+!   close(100)
+
+end subroutine Initialize_real_cell_list
 
 
 subroutine build_totk_vectk
@@ -989,7 +1420,7 @@ subroutine build_rho_k
 
   do m = 1, Nq
     n = charge(m)
-    zq(m) = posq(n,4)
+    zq(m) = pos(n,4)
   end do
 
   c1 = 2*pi/Lx
@@ -1037,83 +1468,6 @@ subroutine build_rho_k
 
 end subroutine build_rho_k
 
-
-subroutine build_fene_list
-  !--------------------------------------!
-  !Construct the fene_list array.
-  !   
-  !Input
-  !   
-  !Output
-  !   fene_list, fene_point
-  !External Variables
-  !   N_bond, Npe, Nml, Ngl
-  !--------------------------------------!
-  use global_variables
-  implicit none
-  integer :: i, j, k, l
-
-  N_bond = Ngl * (Nml-1) * 2
-  allocate( fene_list(N_bond) )
-  allocate( fene_point(Npe) )
-
-  l = 0
-  do i = 1, Npe
-    if ( mod( i, Nml ) == 1 ) then
-      l = l + 1
-      fene_list(l)  = i + 1 
-      fene_point(i) = l
-    elseif( mod( i, Nml ) == 0 ) then
-      l = l + 1
-      fene_list(l)  = i - 1
-      fene_point(i) = l
-    else
-      l = l + 1
-      fene_list(l)  = i - 1
-      l = l + 1
-      fene_list(l)  = i + 1
-      fene_point(i) = l
-    end if
-  end do
-
-end subroutine build_fene_list
-
-
-subroutine rij_and_rr(rij, rsqr, i, j)
-  !-----------------------------------------!
-  !compute displacement vector and displacement of two particles
-  !input:
-  !  post(pos or pos1), i, j(particle number) 
-  !output:
-  !  rij(displacement vecter), rr(square of displacement)
-  !External Variant:
-  !  Lz(used in period condition)
-  !note:
-  !  including period condition
-  !-----------------------------------------!
-  use global_variables
-  implicit none
-  real*8, dimension(3), intent(out) :: rij
-  real*8, intent(out) :: rsqr
-  integer, intent(in) :: i
-  integer, intent(in) :: j
-
-  rij = posq(i,1:3) - posq(j,1:3)
-
-  if ( rij(1) > Lx/2 ) then
-    rij(1) = rij(1) - Lx
-  elseif( rij(1) <= -Lx/2 ) then
-    rij(1) = rij(1) + Lx
-  end if
-  if ( rij(2) > Ly/2 ) then
-    rij(2) = rij(2) - Ly
-  elseif( rij(2) <= -Ly/2 ) then
-    rij(2) = rij(2) + Ly
-  end if
-
-  rsqr = rij(1)*rij(1) + rij(2)*rij(2) + rij(3)*rij(3)
-
-end subroutine rij_and_rr
 
 
 end module compute_energy_ewald
