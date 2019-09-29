@@ -7,8 +7,8 @@ module compute_energy_ewald
   save
 
 !############coefficient in potential function#############!
-!
-!coulomb
+  !
+  !coulomb
   !
   !coulomb potential
   real*8,  private :: lb          !Bjerrum length
@@ -40,6 +40,12 @@ module compute_energy_ewald
 
 
 !##########################arrays##########################!
+  !
+  !charge number to monomer number        
+  integer, allocatable, dimension( : )          :: charge
+  !  
+  !monomer number to charge number
+  integer, allocatable, dimension( : ), private :: inv_charge
   !
   !neighbor cells of the center cell
   integer, allocatable, dimension(:,:,:), private :: cell_near_list 
@@ -173,15 +179,9 @@ subroutine Periodic_array
   allocate(periodic_x(-Lx2:Lx2))
   allocate(periodic_y(-Ly2:Ly2))
   allocate(periodic_z(-Lz2:Lz2))
-  allocate(fourier_x(-Lx2:Lx2))
-  allocate(fourier_y(-Ly2:Ly2))
-  allocate(fourier_z(-Lz2:Lz2))
   Periodic_x = 0
   Periodic_y = 0
   periodic_z = 0
-  fourier_x = 0
-  fourier_y = 0
-  fourier_z = 0
 
   if (mod(Lx2,2) == 0) then
     do i = -Lx2, Lx2
@@ -245,30 +245,16 @@ subroutine Periodic_array
     end if 
   end do
 
-  do i = -Lx2, Lx2
-    fourier_x(i) = Periodic_x(i) + 1
-    fourier_x(i) = (fourier_x(i)-1)*(K2_half+1)*(Lz2+1)
-  end do
-
-  do i = -Ly2, Ly2
-    fourier_y(i) = Periodic_y(i) + 1
-    fourier_y(i) = (fourier_y(i)-1)*(Lz2+1)
-  end do
-
-  do i = -Lz2, Lz2
-    fourier_z(i) = Periodic_z(i) + 1
-  end do
-
 
   open(120,file='./data/periodic_xy.txt')
     do i = -Lx2, Lx2
-      write(120,*) i,periodic_x(i),Periodic_y(i),fourier_x(i),fourier_y(i)
+      write(120,*) i,periodic_x(i),Periodic_y(i)
     end do
   close(120)
 
   open(121,file='./data/periodic_z.txt')
     do i = -Lz2, Lz2
-      write(121,*) i,periodic_z(i),fourier_z(i)
+      write(121,*) i,periodic_z(i)
     end do
   close(121)
 
@@ -295,9 +281,10 @@ subroutine total_energy_ewald(EE, rt, ft)
   real*8, intent(out) :: ft
   integer :: i, j, k, l, m, n, x1, y1, z1, x, y, z, t
   integer :: icelx, icely, icelz, ncel
-  real*8 :: st, fn, EE1, EE2,rr(4),q_total
+  real*8 :: st, fn, EE1, EE2,rr(4),q_total,Ec
 
   EE = 0
+  Ec = 0
   !
   !real space
   call cpu_time(st)
@@ -329,40 +316,23 @@ subroutine total_energy_ewald(EE, rt, ft)
         k = cell_list_r(k)
       end do
     end do
-    EE = EE + EE1 * pos(m,4)
+    EE = EE + EE1*pos(m,4)/2.D0 
+    !
+    !external field
+    EE = EE - EF*pos(m,4)*pos(m,3)/2.D0
+    !
+    !self corrected term
+    Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
   end do
-  EE=EE
   call cpu_time(fn)
-  rt = fn - st 
+  rt = fn - st
   !
   !fourier space
-  call cpu_time(st)
-  q_total = 0
-  do i = 1, Nq
-    m = charge(i)
-    EE2=0
-    x = pos(m,1)
-    y = pos(m,2)
-    z = pos(m,3)
-    do j = 1, Nq
-      n = charge(j)
-      if (m/=n) then  
-        EE2=EE2+pos(n,4)*fourier_ij( fourier_x(x - pos(n,1)) + &
-            fourier_y(y - pos(n,2)) + fourier_z(z - pos(n,3)) )
-      end if
-    end do
-    EE2= pos(m,4)*EE2
-    EE = EE + EE2 - EF*pos(m,4)*pos(m,3)/2.D0*2
-    q_total = q_total + pos(m,4)**2
-  end do
-  call cpu_time(fn)
-  ft = fn - st
+  EE = EE + Ec/Beta*lb + sum( exp_ksqr * real( conjg(rho_k) * rho_k ) )/2.D0
   !
   !modified term of slab geometry
-  EE = EE/2 + 2*pi/(Lx*Ly*Lz*Z_empty) * lb/Beta * Mz**2
-
-  EE = EE - sqrt(alpha2/pi)*q_total
-
+  EE = EE + Mz_coef * Mz**2
+  
 end subroutine total_energy_ewald
 
 
@@ -429,10 +399,10 @@ subroutine Delta_Energy_Ewald_add(DeltaE)
   if ( pos_ip0(4) /= 0 ) then
     !
     !Compute coulomb energy change in real space
-    call Delta_real_Energy(DeltaE)
+    call Delta_real_Energy_add(DeltaE)
     !
     !Compute coulomb energy change in reciprocal space
-    call Delta_Reciprocal_Energy(DeltaE)
+    call Delta_Reciprocal_Energy_add(DeltaE)
   end if 
 
 end subroutine Delta_Energy_Ewald_add
@@ -465,10 +435,10 @@ subroutine Delta_Energy_Ewald_delete(DeltaE)
   if ( pos_ip0(4) /= 0 ) then
     !
     !Compute coulomb energy change in real space
-    call Delta_real_Energy(DeltaE)
+    call Delta_real_Energy_delete(DeltaE)
     !
     !Compute coulomb energy change in reciprocal space
-    call Delta_Reciprocal_Energy(DeltaE)
+    call Delta_Reciprocal_Energy_delete(DeltaE)
   end if 
 
 end subroutine Delta_Energy_Ewald_delete
@@ -560,8 +530,7 @@ subroutine Delta_real_Energy(DeltaE)
   !
   !Change of correction energy in slab geometry
   dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))/2.D0
-  DeltaE = DeltaE +  lB/Beta * EE + Mz_coef * (2*Mz*dMz + dMz*dMz)
-
+  DeltaE = DeltaE + Mz_coef * (2*Mz*dMz + dMz*dMz)
   !
   ! External field energy
   DeltaE=DeltaE-EF*pos_ip0(4)*(pos_ip1(3)-pos_ip0(3))/2.D0   !simga unit
@@ -636,14 +605,9 @@ subroutine Delta_real_Energy_add
   x = pos_ip1i(1) - pos_ip1(1)
   y = pos_ip1i(2) - pos_ip1(2)
   z = pos_ip1i(3) - pos_ip1(3)
-  x1 = fourier_x(x)
-  y1 = fourier_y(y)
-  z1 = fourier_z(z)
   x = Periodic_x(x)
   y = Periodic_y(y)
   z = Periodic_z(z)
-  t = x1 + y1 + z1
-  DeltaE = DeltaE + qq1*qq2*fourier_ij(t)
   if (x*x+y*y+z*z<rcc2) then
     DeltaE = DeltaE + qq1*qq2*real_ij(x,y,z)
   end if
@@ -651,11 +615,11 @@ subroutine Delta_real_Energy_add
   !modified term of slab geometry
   dMz = pos_ip1i(4)*pos_ip1i(3)/2.D0 + pos_ip1(4)*pos_ip1(3)/2.D0
   DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
-
   !
   !External field energy
   DeltaE=DeltaE-EF*pos_ip1i(4)*pos_ip1i(3)/2.D0-EF*pos_ip1(4)*pos_ip1(3)/2.D0
-
+  !
+  !
   DeltaE = DeltaE - sqrt(alpha2/pi)*(pos_ip1(4)**2+pos_ip1i(4)**2)
 
 end subroutine Delta_real_Energy_add
@@ -737,22 +701,12 @@ subroutine Delta_real_Energy_delete
   x = pos_ip1i(1) - pos_ip1(1)
   y = pos_ip1i(2) - pos_ip1(2)
   z = pos_ip1i(3) - pos_ip1(3)
-  x1 = fourier_x(x)
-  y1 = fourier_y(y)
-  z1 = fourier_z(z)
   x = Periodic_x(x)
   y = Periodic_y(y)
   z = Periodic_z(z)
-  t = x1 + y1 + z1
-  DeltaE = DeltaE + qq1*qq2*fourier_ij(t)
   if ((x*x+y*y+z*z)<rcc2) then
     DeltaE = DeltaE + qq1*qq2*real_ij(x,y,z)
   end if 
-  if (abs(DeltaE)>1e10) then
-    write(*,*) 'inter',x,y,z,x1,y1,z1,pos_ip1i(1:3) - pos_ip1(1:3)
-    write(*,*) fourier_ij(t),real_ij(x,y,z)
-    stop
-  end if
   !
   !modified term of slab geometry
   dMz = - pos_ip0i(4)*pos_ip0i(3)/2.D0 - pos_ip0(4)*pos_ip0(3)/2.D0
@@ -801,9 +755,9 @@ subroutine Delta_Reciprocal_Energy(DeltaE)
   eikx0(0)  = ( 1,0 )
   eiky0(0)  = ( 1,0 )
   eikz0(0)  = ( 1,0 )
-  eikx0(1)  = cmplx( cos( c1 * pos_ip0(1) ), sin( -c1 * pos_ip0(1) ), 8 )
-  eiky0(1)  = cmplx( cos( c2 * pos_ip0(2) ), sin( -c2 * pos_ip0(2) ), 8 )
-  eikz0(1)  = cmplx( cos( c3 * pos_ip0(3) ), sin( -c3 * pos_ip0(3) ), 8 )
+  eikx0(1)  = cmplx( cos(c1*pos_ip0(1)/2.D0), sin(-c1*pos_ip0(1)/2.D0), 8 )
+  eiky0(1)  = cmplx( cos(c2*pos_ip0(2)/2.D0), sin(-c2*pos_ip0(2)/2.D0), 8 )
+  eikz0(1)  = cmplx( cos(c3*pos_ip0(3)/2.D0), sin(-c3*pos_ip0(3)/2.D0), 8 )
   eikx0(-1) = conjg( eikx0(1) )
   eiky0(-1) = conjg( eiky0(1) )
 
@@ -822,9 +776,9 @@ subroutine Delta_Reciprocal_Energy(DeltaE)
   eikx1(0)  = ( 1,0 )
   eiky1(0)  = ( 1,0 )
   eikz1(0)  = ( 1,0 )
-  eikx1(1)  = cmplx( cos( c1 * pos_ip1(1) ), sin( -c1 * pos_ip1(1) ), 8 )
-  eiky1(1)  = cmplx( cos( c2 * pos_ip1(2) ), sin( -c2 * pos_ip1(2) ), 8 )
-  eikz1(1)  = cmplx( cos( c3 * pos_ip1(3) ), sin( -c3 * pos_ip1(3) ), 8 )
+  eikx1(1)  = cmplx( cos(c1*pos_ip1(1)/2.D0), sin(-c1*pos_ip1(1)/2.D0), 8 )
+  eiky1(1)  = cmplx( cos(c2*pos_ip1(2)/2.D0), sin(-c2*pos_ip1(2)/2.D0), 8 )
+  eikz1(1)  = cmplx( cos(c3*pos_ip1(3)/2.D0), sin(-c3*pos_ip1(3)/2.D0), 8 )
   eikx1(-1) = conjg( eikx1(1) )
   eiky1(-1) = conjg( eiky1(1) )
 
@@ -862,10 +816,10 @@ end subroutine Delta_Reciprocal_Energy
 subroutine Delta_Reciprocal_Energy_add
   real*8, intent(inout) :: DeltaE
   real*8  :: Del_Recip_erg
-  complex(kind=8) :: eikx1( -Kmax1:Kmax1 )
-  complex(kind=8) :: eiky1( -Kmax2:Kmax2 )
-  complex(kind=8) :: eikz1( 0:Kmax3 )
-  complex(kind=8) :: eikr1
+  complex(kind=8) :: eikx0( -Kmax1:Kmax1 ), eikx1( -Kmax1:Kmax1 )
+  complex(kind=8) :: eiky0( -Kmax2:Kmax2 ), eiky1( -Kmax2:Kmax2 )
+  complex(kind=8) :: eikz0( 0:Kmax3 ), eikz1( 0:Kmax3 )
+  complex(kind=8) :: eikr0, eikr1
   real*8  :: c1, c2, c3
   integer :: ord(3), i, p, q, r
 
@@ -873,12 +827,33 @@ subroutine Delta_Reciprocal_Energy_add
   c2 = 2*pi / Ly
   c3 = 2*pi / (Lz*Z_empty)
 
+  eikx0(0)  = ( 1,0 )
+  eiky0(0)  = ( 1,0 )
+  eikz0(0)  = ( 1,0 )
+  eikx0(1)  = cmplx( cos(c1*pos_ip1(1)/2.D0), sin(-c1*pos_ip1(1)/2.D0), 8 )
+  eiky0(1)  = cmplx( cos(c2*pos_ip1(2)/2.D0), sin(-c2*pos_ip1(2)/2.D0), 8 )
+  eikz0(1)  = cmplx( cos(c3*pos_ip1(3)/2.D0), sin(-c3*pos_ip1(3)/2.D0), 8 )
+  eikx0(-1) = conjg( eikx0(1) )
+  eiky0(-1) = conjg( eiky0(1) )
+
+  do p = 2, Kmax1
+    eikx0(p)  = eikx0(p-1) * eikx0(1)
+    eikx0(-p) = conjg( eikx0(p) )
+  end do
+  do q = 2, Kmax2
+    eiky0(q)  = eiky0(q-1) * eiky0(1)
+    eiky0(-q) = conjg(eiky0(q))
+  end do
+  do r = 2, Kmax3
+    eikz0(r)  = eikz0(r-1) * eikz0(1)
+  end do
+
   eikx1(0)  = ( 1,0 )
   eiky1(0)  = ( 1,0 )
   eikz1(0)  = ( 1,0 )
-  eikx1(1)  = cmplx( cos( c1 * pos_ip1(1) ), sin( -c1 * pos_ip1(1) ), 8 )
-  eiky1(1)  = cmplx( cos( c2 * pos_ip1(2) ), sin( -c2 * pos_ip1(2) ), 8 )
-  eikz1(1)  = cmplx( cos( c3 * pos_ip1(3) ), sin( -c3 * pos_ip1(3) ), 8 )
+  eikx1(1)  = cmplx( cos(c1*pos_ip1i(1)/2.D0), sin(-c1*pos_ip1i(1)/2.D0), 8 )
+  eiky1(1)  = cmplx( cos(c2*pos_ip1i(2)/2.D0), sin(-c2*pos_ip1i(2)/2.D0), 8 )
+  eikz1(1)  = cmplx( cos(c3*pos_ip1i(3)/2.D0), sin(-c3*pos_ip1i(3)/2.D0), 8 )
   eikx1(-1) = conjg( eikx1(1) )
   eiky1(-1) = conjg( eiky1(1) )
 
@@ -896,13 +871,13 @@ subroutine Delta_Reciprocal_Energy_add
 
   do i=1, K_total
     ord = totk_vectk(i,1:3)
+    eirk0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
     eikr1 = eikx1(ord(1)) * eiky1(ord(2)) * eikz1(ord(3))
-    delta_rhok(i) = eikr1
+    delta_rhok(i) = eikr1 - eikr0
+    delta_cosk(i) = 1 - real( conjg(eikr1) * eikr0 )
   end do
 
-  delta_rhok = delta_rhok * pos_ip0(4)
-
-  Del_Recip_erg=sum(exp_ksqr*(Real(rho_k*delta_rhok)+pos_ip0(4)*pos_ip0(4)))
+  Del_Recip_erg = sum( exp_ksqr * ( Real( rho_k * delta_rhok ) + delta_cosk ) )
 
   DeltaE = DeltaE + Del_Recip_erg
 
@@ -926,9 +901,9 @@ subroutine Delta_Reciprocal_Energy_delete
   eikx0(0)  = ( 1,0 )
   eiky0(0)  = ( 1,0 )
   eikz0(0)  = ( 1,0 )
-  eikx0(1)  = cmplx( cos( c1 * pos_ip0(1) ), sin( -c1 * pos_ip0(1) ), 8 )
-  eiky0(1)  = cmplx( cos( c2 * pos_ip0(2) ), sin( -c2 * pos_ip0(2) ), 8 )
-  eikz0(1)  = cmplx( cos( c3 * pos_ip0(3) ), sin( -c3 * pos_ip0(3) ), 8 )
+  eikx0(1)  = cmplx( cos(c1*pos_ip0(1)/2.D0), sin(-c1*pos_ip0(1)/2.D0), 8 )
+  eiky0(1)  = cmplx( cos(c2*pos_ip0(2)/2.D0), sin(-c2*pos_ip0(2)/2.D0), 8 )
+  eikz0(1)  = cmplx( cos(c3*pos_ip0(3)/2.D0), sin(-c3*pos_ip0(3)/2.D0), 8 )
   eikx0(-1) = conjg( eikx0(1) )
   eiky0(-1) = conjg( eiky0(1) )
 
@@ -944,19 +919,250 @@ subroutine Delta_Reciprocal_Energy_delete
     eikz0(r)  = eikz0(r-1) * eikz0(1)
   end do
 
-  do i=1, K_total
-    ord = totk_vectk(i,1:3)
-    eikr0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
-    delta_rhok(i) = - eikr0
+  eikx1(0)  = ( 1,0 )
+  eiky1(0)  = ( 1,0 )
+  eikz1(0)  = ( 1,0 )
+  eikx1(1)  = cmplx( cos(c1*pos_ip0i(1)/2.D0), sin(-c1*pos_ip0i(1)/2.D0), 8 )
+  eiky1(1)  = cmplx( cos(c2*pos_ip0i(2)/2.D0), sin(-c2*pos_ip0i(2)/2.D0), 8 )
+  eikz1(1)  = cmplx( cos(c3*pos_ip0i(3)/2.D0), sin(-c3*pos_ip0i(3)/2.D0), 8 )
+  eikx1(-1) = conjg( eikx1(1) )
+  eiky1(-1) = conjg( eiky1(1) )
+
+  do p=2, Kmax1
+    eikx1(p)  = eikx1(p-1) * eikx1(1)
+    eikx1(-p) = conjg( eikx1(p) )
+  end do
+  do q=2, Kmax2
+    eiky1(q)  = eiky1(q-1) * eiky1(1)
+    eiky1(-q) = conjg(eiky1(q))
+  end do
+  do r=2, Kmax3
+    eikz1(r)  = eikz1(r-1) * eikz1(1)
   end do
 
-  delta_rhok = delta_rhok * pos_ip0(4)
+  do i=1, K_total
+    ord = totk_vectk(i,1:3)
+    eirk0 = eikx0(ord(1)) * eiky0(ord(2)) * eikz0(ord(3))
+    eikr1 = eikx1(ord(1)) * eiky1(ord(2)) * eikz1(ord(3))
+    delta_rhok(i) = - eikr1 + eikr0
+    delta_cosk(i) = 1 - real( conjg(eikr1) * eikr0 )
+  end do
 
-  Del_Recip_erg=sum(exp_ksqr*(Real(rho_k*delta_rhok)-pos_ip0(4)*pos_ip0(4)))
+  Del_Recip_erg = sum( exp_ksqr * ( Real( rho_k * delta_rhok ) + delta_cosk ) )
 
   DeltaE = DeltaE + Del_Recip_erg
 
 end subroutine Delta_Reciprocal_Energy_delete
+
+
+subroutine update_real_cell_list_Ewald
+  use global_variables
+  implicit none
+  integer :: icelx,icely,icelz
+
+  icelx = int((pos_ip0(1)-1)/clx)+1
+  icely = int((pos_ip0(2)-1)/cly)+1
+  icelz = int((pos_ip0(3)-1)/clz)+1
+  call update_real_cell_list_delete(ip,icelx,icely,icelz)
+
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
+  call update_real_cell_list_add(ip,icelx,icely,icelz)
+
+  Mz = Mz + dMz
+
+end subroutine update_real_cell_list_Ewald
+
+
+subroutine update_cell_list_pH_add_Ewald
+  use global_variables
+  implicit none
+  integer :: icelx,icely,icelz
+
+  icelx = int((pos_ip1(1)-1)/clx)+1
+  icely = int((pos_ip1(2)-1)/cly)+1
+  icelz = int((pos_ip1(3)-1)/clz)+1
+  call update_real_cell_list_add(ip,icelx,icely,icelz)
+  call update_charge_cell_list_add(ip)
+
+  icelx = int((pos_ip1i(1)-1)/clx)+1
+  icely = int((pos_ip1i(2)-1)/cly)+1
+  icelz = int((pos_ip1i(3)-1)/clz)+1
+  call update_real_cell_list_add(ip1,icelx,icely,icelz)
+  call update_charge_cell_list_add(ip1)
+
+  Mz = Mz + dMz
+
+  Nq_net = Nq_net + 1
+
+end subroutine update_cell_list_pH_add_Ewald
+
+
+subroutine update_cell_list_pH_delete_Ewald
+  use global_variables
+  implicit none
+  integer :: icelx,icely,icelz
+
+  icelx = int((pos_ip0(1)-1)/clx)+1
+  icely = int((pos_ip0(2)-1)/cly)+1
+  icelz = int((pos_ip0(3)-1)/clz)+1
+  call update_real_cell_list_delete(ip,icelx,icely,icelz)
+  call update_charge_cell_list_delete(ip)
+
+  icelx = int((pos_ip0i(1)-1)/clx)+1
+  icely = int((pos_ip0i(2)-1)/cly)+1
+  icelz = int((pos_ip0i(3)-1)/clz)+1 
+  call update_real_cell_list_delete(ip1,icelx,icely,icelz)
+  call update_charge_cell_list_delete(ip1)
+
+  Mz = Mz + dMz
+
+  Nq_net = Nq_net - 1
+
+end subroutine update_cell_list_pH_delete_Ewald
+
+
+subroutine update_real_cell_list_add_Ewald(iq,icelx,icely,icelz)
+  use global_variables
+  implicit none
+  integer, intent(in) :: iq
+  integer, intent(in) :: icelx, icely, icelz
+  integer :: nti,bfi,ii,j       ! next particle of ii, before particle of ii
+  integer :: ed, st 
+
+  ii = inv_charge(iq)   !ii belongs to [1,Nq]
+
+  inv_cell_list_r(ii) = 0
+  if ( inv_hoc_r(icelx,icely,icelz) /=0 ) then
+    inv_cell_list_r( hoc_r(icelx,icely,icelz) ) = ii
+  else
+    inv_hoc_r(icelx,icely,icelz) = ii
+  end if
+
+  cell_list_r(ii) = hoc_r(icelx,icely,icelz)
+  hoc_r(icelx,icely,icelz) = ii
+
+!   j = hoc_r(icelx,icely,icelz)  
+!   do while (j/=0)
+!     j = cell_list_r(j)
+!     if ((j==cell_list_r(j) .and. j/=0).or. j>20000) then
+!       write(*,*) j
+!       write(*,*) 'add'
+!       stop
+!     end if
+!   end do
+
+end subroutine update_real_cell_list_add_Ewald
+
+
+subroutine update_real_cell_list_delete_Ewald(iq,icelx,icely,icelz)
+  use global_variables
+  implicit none
+  integer, intent(in) :: iq
+  integer, intent(in) :: icelx, icely, icelz
+  integer :: nti,bfi,ii,j       ! next particle of ii, before particle of ii
+  integer :: ed, st 
+
+  ii = inv_charge(iq)   !ii belongs to [1,Nq]
+
+  bfi = cell_list_r(ii)
+  nti = inv_cell_list_r(ii)
+
+  if ( bfi/=0 .and. nti/=0 ) then        !middle
+    cell_list_r(nti) = bfi
+    inv_cell_list_r(bfi) = nti
+  elseif ( bfi==0 .and. nti/=0 ) then    !the first one
+    cell_list_r(nti) = bfi
+    inv_hoc_r(icelx,icely,icelz) = nti
+  elseif ( bfi/=0 .and. nti==0 ) then    !the last one
+    hoc_r(icelx,icely,icelz) = bfi
+    inv_cell_list_r(bfi) = nti
+  else                                   !only one
+    hoc_r(icelx,icely,icelz) = nti
+    inv_hoc_r(icelx,icely,icelz) = bfi
+  end if
+
+!   j = hoc_r(icelx,icely,icelz) 
+!   do while (j/=0)
+!     j = cell_list_r(j)
+!     if ((j==cell_list_r(j) .and. j/=0).or.j>20000) then
+!       write(*,*) 'delete'
+!       write(*,*) j,bfi,nti,ii,icelx,icely,icelz
+!       stop
+!     end if
+!   end do
+
+end subroutine update_real_cell_list_delete_Ewald
+
+
+subroutine update_charge_cell_list_add_Ewald(iq)
+  use global_variables
+  implicit none
+  integer, intent(in) :: iq
+  integer :: ii, j     
+
+  ii = inv_charge(iq)         ! ii belongs to [1,Nq]
+
+  inv_cell_list_q(ii) = 0
+  if ( cell_list_q(Nq+1)/=0 ) then
+    inv_cell_list_q(cell_list_q(Nq+1)) = ii
+  else
+    inv_cell_list_q(Nq+1) = ii
+  end if
+
+  cell_list_q(ii) = cell_list_q(Nq+1)
+  cell_list_q(Nq+1) = ii
+
+!   j = cell_list_q(Nq+1) 
+!   do while (j/=0)
+!     j = cell_list_q(j)
+!     if ((j==cell_list_q(j) .and. j/=0) .or. j>20000) then
+!       write(*,*) 'add pH'
+!       write(*,*) j
+!       stop
+!     end if
+!   end do
+
+end subroutine update_charge_cell_list_add_Ewald
+
+
+subroutine update_charge_cell_list_delete_Ewald(iq)
+  use global_variables
+  implicit none
+  integer, intent(in) :: iq
+  integer :: nti,bfi,ii,j       ! next particle of ii, before particle of ii
+
+  ii = inv_charge(iq)         !ii belongs to [1,Nq]
+  
+  bfi = cell_list_q(ii)
+  nti = inv_cell_list_q(ii)
+
+  if ( bfi/=0 .and. nti/=0 ) then        !middle
+    cell_list_q(nti) = bfi
+    inv_cell_list_q(bfi) = nti
+  elseif ( bfi==0 .and. nti/=0 ) then    !the first one
+    cell_list_q(nti) = bfi
+    inv_cell_list_q(Nq+1) = nti
+  elseif ( bfi/=0 .and. nti==0 ) then
+    cell_list_q(Nq+1) = bfi
+    inv_cell_list_q(bfi) = nti
+  else
+    cell_list_q(Nq+1) = nti
+    inv_cell_list_q(Nq+1) = bfi
+  end if
+
+!   j = cell_list_q(Nq+1) 
+!   do while (j/=0)
+!     j = cell_list_q(j)
+!     if ((j==cell_list_q(j) .and. j/=0).or.j>20000) then
+!       write(*,*) 'delete pH'
+!       write(*,*) j,ii
+!       stop
+!     end if
+!   end do
+
+end subroutine update_charge_cell_list_delete_Ewald
 
 
 subroutine error_analysis_ewald(EE1)
@@ -1003,7 +1209,7 @@ subroutine read_energy_parameters_Ewald
 end subroutine read_energy_parameters_Ewald
 
 
-subroutine write_energy_parameters
+subroutine write_energy_parameters_Ewald
   !--------------------------------------!
   !
   !--------------------------------------!
@@ -1016,15 +1222,18 @@ subroutine write_energy_parameters
   write(*,*) 'Kmax3      :', Kmax3
   write(*,*) 'K_total    :', K_total
   write(*,*) 'alpha      :', alpha
-  write(*,*) 'real_verlet:', real_verlet
-  write(*,*) 'rc_real    :', rc_real
   write(*,*) 'tol        :', tol
   write(*,*) 'tau_rf     :', tau_rf
-  write(*,*) 'rc_lj      :', rc_lj
-  write(*,*) 'rv_lj      :', rv_lj
+  write(*,*) 'rcc        :', rcc
+  write(*,*) 'nclx       :', nclx
+  write(*,*) 'ncly       :', ncly
+  write(*,*) 'nclz       :', nclz
+  write(*,*) 'clx        :', clx
+  write(*,*) 'cly        :', cly
+  write(*,*) 'clz        :', clz
   write(*,*) '****************************************************'
 
-end subroutine write_energy_parameters
+end subroutine write_energy_parameters_Ewald
 
 
 subroutine Initialize_ewald_parameters
@@ -1146,7 +1355,7 @@ subroutine Build_Charge_Ewald
 end subroutine Build_Charge_Ewald
 
 
-subroutine Initialize_cell_list_q
+subroutine Initialize_cell_list_q_Ewald
   use global_variables
   implicit none
   integer :: i, j, k
@@ -1173,10 +1382,10 @@ subroutine Initialize_cell_list_q
     end do
   close(112)
 
-end subroutine Initialize_cell_list_q
+end subroutine Initialize_cell_list_q_Ewald
 
 
-subroutine Initialize_real_cell_list
+subroutine Initialize_real_cell_list_Ewald
   use global_variables
   implicit none
   integer :: i, j, k, l, m, n, p, q, r, x, y, z
@@ -1269,7 +1478,7 @@ subroutine Initialize_real_cell_list
 !     end do
 !   close(100)
 
-end subroutine Initialize_real_cell_list
+end subroutine Initialize_real_cell_list_Ewald
 
 
 subroutine build_totk_vectk
@@ -1432,9 +1641,9 @@ subroutine build_rho_k
     eiky(m,0)  = (1,0)
     eikz(m,0)  = (1,0)
 
-    eikx(m,1)  = cmplx( cos(c1*posq(i,1)), sin(c1*posq(i,1)), 8 )
-    eiky(m,1)  = cmplx( cos(c2*posq(i,2)), sin(c2*posq(i,2)), 8 )
-    eikz(m,1)  = cmplx( cos(c3*posq(i,3)), sin(c3*posq(i,3)), 8 )
+    eikx(m,1)  = cmplx( cos(c1*pos(i,1)/2.D0), sin(c1*pos(i,1)/2.D0), 8 )
+    eiky(m,1)  = cmplx( cos(c2*pos(i,2)/2.D0), sin(c2*pos(i,2)/2.D0), 8 )
+    eikz(m,1)  = cmplx( cos(c3*pos(i,3)/2.D0), sin(c3*pos(i,3)/2.D0), 8 )
 
     eikx(m,-1) = conjg(eikx(m,1))
     eiky(m,-1) = conjg(eiky(m,1))
@@ -1467,8 +1676,6 @@ subroutine build_rho_k
   end do
 
 end subroutine build_rho_k
-
-
 
 end module compute_energy_ewald
 

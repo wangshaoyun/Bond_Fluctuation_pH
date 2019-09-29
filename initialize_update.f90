@@ -293,21 +293,21 @@ call cpu_time(st)
     if ( mod(i,DeltaStep) == 0 .and. Nq/=0 ) then
       call choose_particle_pH
       if (pos(ip,4)==0) then
-!         call energy_lookup_table(EE1, real_time, fourier_time)
+!         call total_energy_ewald(EE1, real_time, fourier_time)
         call add_particle(EE,DeltaE)
-!         call energy_lookup_table(EE2, real_time, fourier_time)
+!         call total_energy_ewald(EE2, real_time, fourier_time)
 !         write(*,*) 'add',EE2-EE1,DeltaE,EE2,EE,ip
       else
-!         call energy_lookup_table(EE1, real_time, fourier_time)
+!         call total_energy_ewald(EE1, real_time, fourier_time)
         call delete_particle(EE,DeltaE)
-!         call energy_lookup_table(EE2, real_time, fourier_time)
+!         call total_energy_ewald(EE2, real_time, fourier_time)
 !         write(*,*) 'delete',EE2-EE1,DeltaE,EE2,EE,ip
       end if
     else
       call choose_particle
-!       call energy_lookup_table(EE1, real_time, fourier_time)
+!       call total_energy_ewald(EE1, real_time, fourier_time)
       call new_position(EE,DeltaE)
-!       call energy_lookup_table(EE2, real_time, fourier_time)
+!       call total_energy_ewald(EE2, real_time, fourier_time)
 !       write(*,*) 'move',EE2-EE1,DeltaE,EE2,EE,ip
     end if
   end do
@@ -396,7 +396,7 @@ subroutine add_particle(EE,DeltaE)
       latt(xp,yp,zp) = 1
       pos(ip,:) = pos_ip1
       pos(ip1,:) = pos_ip1i
-      call update_cell_list_pH_add
+      call update_cell_list_pH_add_Ewald
       EE = EE + DeltaE
       accept = accept + 1
     else
@@ -412,7 +412,7 @@ subroutine add_particle(EE,DeltaE)
         latt(xp,yp,zp) = 1
         pos(ip,:) = pos_ip1
         pos(ip1,:) = pos_ip1i
-        call update_cell_list_pH_add
+        call update_cell_list_pH_add_Ewald
         EE = EE + DeltaE 
         accept = accept + 1
       end if 
@@ -458,7 +458,7 @@ subroutine delete_particle(EE, DeltaE)
     latt(xp,yp,zp) = 0    
     pos(ip,:) = pos_ip1
     pos(ip1,:) = pos_ip1i
-    call update_cell_list_pH_delete
+    call update_cell_list_pH_delete_Ewald
     EE = EE + DeltaE
     accept = accept + 1
   else
@@ -474,7 +474,7 @@ subroutine delete_particle(EE, DeltaE)
       latt(xp,yp,zp) = 0    
       pos(ip,:) = pos_ip1
       pos(ip1,:) = pos_ip1i
-      call update_cell_list_pH_delete
+      call update_cell_list_pH_delete_Ewald
       EE = EE + DeltaE
       accept = accept + 1
     end if
@@ -558,7 +558,7 @@ subroutine new_position(EE, DeltaE)
           latt(ix,iy,zp1)   = 0 
           latt(ix,yp1,zp1)  = 0 
           if (pos_ip1(4)/=0) then
-            call update_real_cell_list
+            call update_real_cell_list_Ewald
           end if
           accept = accept + 1
         else
@@ -580,7 +580,7 @@ subroutine new_position(EE, DeltaE)
             latt(ix,iy,zp1)   = 0 
             latt(ix,yp1,zp1)  = 0 
             if (pos_ip1(4)/=0) then
-              call update_real_cell_list
+              call update_real_cell_list_Ewald
             end if
             accept = accept + 1
           end if
@@ -616,7 +616,7 @@ subroutine new_position(EE, DeltaE)
           latt(xp1,iy,zp1)  = 0
           latt(xp1,yp1,zp1) = 0 
           if (pos_ip1(4)/=0) then
-            call update_real_cell_list
+            call update_real_cell_list_Ewald
           end if
           accept = accept + 1
         else
@@ -638,7 +638,7 @@ subroutine new_position(EE, DeltaE)
             latt(xp1,iy,zp1)  = 0 
             latt(xp1,yp1,zp1) = 0
             if (pos_ip1(4)/=0) then
-              call update_real_cell_list
+              call update_real_cell_list_Ewald
             end if
             accept = accept + 1
           end if
@@ -673,7 +673,7 @@ subroutine new_position(EE, DeltaE)
           latt(ix,iy,zp1)   = 0 
           latt(xp1,iy,zp1)  = 0 
           if (pos_ip1(4)/=0) then
-            call update_real_cell_list
+            call update_real_cell_list_Ewald
           end if
           accept = accept + 1
         else
@@ -695,7 +695,7 @@ subroutine new_position(EE, DeltaE)
             latt(ix,iy,zp1)   = 0 
             latt(xp1,iy,zp1)  = 0 
             if (pos_ip1(4)/=0) then
-              call update_real_cell_list
+              call update_real_cell_list_Ewald
             end if
             accept = accept + 1
           end if
@@ -731,7 +731,7 @@ subroutine new_position(EE, DeltaE)
           latt(ix,yp1,zp1)  = 0 
           latt(xp1,yp1,zp1) = 0 
           if (pos_ip1(4)/=0) then
-            call update_real_cell_list
+            call update_real_cell_list_Ewald
           end if
           accept = accept + 1
         else
@@ -753,7 +753,7 @@ subroutine new_position(EE, DeltaE)
             latt(ix,yp1,zp1)  = 0 
             latt(xp1,yp1,zp1) = 0 
             if (pos_ip1(4)/=0) then
-              call update_real_cell_list
+              call update_real_cell_list_Ewald
             end if
             accept = accept + 1
           end if
@@ -788,7 +788,7 @@ subroutine new_position(EE, DeltaE)
           latt(ix,yp1,iz)   = 0 
           latt(xp1,yp1,iz)  = 0 
           if (pos_ip1(4)/=0) then
-            call update_real_cell_list
+            call update_real_cell_list_Ewald
           end if
           accept = accept + 1
         else
@@ -810,7 +810,7 @@ subroutine new_position(EE, DeltaE)
             latt(ix,yp1,iz)   = 0 
             latt(xp1,yp1,iz)  = 0 
             if (pos_ip1(4)/=0) then
-              call update_real_cell_list
+              call update_real_cell_list_Ewald
             end if
             accept = accept + 1
           end if
@@ -846,7 +846,7 @@ subroutine new_position(EE, DeltaE)
           latt(ix,yp1,zp1)  = 0 
           latt(xp1,yp1,zp1) = 0 
           if (pos_ip1(4)/=0) then
-            call update_real_cell_list
+            call update_real_cell_list_Ewald
           end if
           accept = accept + 1
         else
@@ -868,7 +868,7 @@ subroutine new_position(EE, DeltaE)
             latt(ix,yp1,zp1)  = 0 
             latt(xp1,yp1,zp1) = 0 
             if (pos_ip1(4)/=0) then
-              call update_real_cell_list
+              call update_real_cell_list_Ewald
             end if
             accept = accept + 1
           end if
