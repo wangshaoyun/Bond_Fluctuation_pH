@@ -94,9 +94,6 @@ module compute_energy_ewald
   !
   !wave vector ordinal number
   integer, allocatable, dimension(:,:), private :: totk_vectk
-  !
-  !same as lj_point and real_point
-  real*8,  allocatable, dimension(:,:), private :: posq
 !########################end arrays########################!
 
 
@@ -141,6 +138,9 @@ subroutine initialize_energy_parameters_Ewald
     !
     !
     call Periodic_array
+    !
+    !
+    call pre_calculate_real_space
   end if
 
 end subroutine initialize_energy_parameters_Ewald
@@ -322,13 +322,13 @@ subroutine total_energy_ewald(EE, rt, ft)
     EE = EE - EF*pos(m,4)*pos(m,3)/2.D0
     !
     !self corrected term
-    Ec = Ec - sqrt(alpha2/pi) * posq(i,4) * posq(i,4)
+    Ec = Ec - sqrt(alpha2/pi) * pos(m,4) * pos(m,4)
   end do
   call cpu_time(fn)
   rt = fn - st
   !
   !fourier space
-  EE = EE + Ec/Beta*lb + sum( exp_ksqr * real( conjg(rho_k) * rho_k ) )/2.D0
+  EE = EE + sum( exp_ksqr * real( conjg(rho_k) * rho_k ) )/2.D0 + Ec/Beta*lb
   !
   !modified term of slab geometry
   EE = EE + Mz_coef * Mz**2
@@ -358,8 +358,6 @@ subroutine Delta_Energy_Ewald(DeltaE)
 	real*8,  intent(out) :: DeltaE
 
   DeltaE = 0
-  !
-  !Compute Coulomb energy
   !
   !Compute coulomb energy change in real space
   call Delta_real_Energy(DeltaE)
@@ -518,7 +516,6 @@ subroutine Delta_real_Energy(DeltaE)
   end do
   EE2 = EE2 * pos_ip1(4)
   DeltaE = DeltaE + EE2 - EE1
-
   !
   !Change of correction energy in slab geometry
   dMz = pos_ip0(4) * (pos_ip1(3) - pos_ip0(3))/2.D0
@@ -539,6 +536,8 @@ subroutine Delta_real_Energy_add(DeltaE)
   real*8, dimension(3) :: rij
 
   DeltaE = 0
+  qq1 = pos_ip1(4)
+  qq2 = pos_ip1i(4)
   EE1 = 0
   icelx = int((pos_ip1(1)-1)/clx)+1
   icely = int((pos_ip1(2)-1)/cly)+1
@@ -606,13 +605,13 @@ subroutine Delta_real_Energy_add(DeltaE)
   !
   !modified term of slab geometry
   dMz = pos_ip1i(4)*pos_ip1i(3)/2.D0 + pos_ip1(4)*pos_ip1(3)/2.D0
-  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+  DeltaE = DeltaE + Mz_coef * (2*Mz*dMz + dMz*dMz)
   !
   !External field energy
   DeltaE=DeltaE-EF*pos_ip1i(4)*pos_ip1i(3)/2.D0-EF*pos_ip1(4)*pos_ip1(3)/2.D0
   !
   !
-  DeltaE = DeltaE - sqrt(alpha2/pi)*(pos_ip1(4)**2+pos_ip1i(4)**2)
+  DeltaE = DeltaE - sqrt(alpha2/pi)*(qq1**2+qq2**2)*lb/beta
 
 end subroutine Delta_real_Energy_add
 
@@ -626,6 +625,8 @@ subroutine Delta_real_Energy_delete(DeltaE)
   real*8, dimension(3) :: rij
 
   DeltaE = 0
+  qq1 = pos_ip0(4)         !polymer
+  qq2 = pos_ip0i(4)        !ions
   !
   ! Real Space
   EE1 = 0
@@ -636,7 +637,7 @@ subroutine Delta_real_Energy_delete(DeltaE)
   do i = 1, cell_near_list(ncel,28,1)
     icelx = cell_near_list(ncel,i,1)
     icely = cell_near_list(ncel,i,2)
-    icelz = cell_near_list(ncel,i,3)   
+    icelz = cell_near_list(ncel,i,3)
     j = hoc_r(icelx,icely,icelz) 
     do while (j/=0) 
       k = charge(j)
@@ -684,10 +685,6 @@ subroutine Delta_real_Energy_delete(DeltaE)
   end do
   EE2 = -EE2 * qq2
   DeltaE = DeltaE + EE1 + EE2
-  if (abs(DeltaE)>1e10) then
-    write(*,*) 'real'
-    stop
-  end if
   !
   !interaction of the added two particles
   x = pos_ip1i(1) - pos_ip1(1)
@@ -702,12 +699,12 @@ subroutine Delta_real_Energy_delete(DeltaE)
   !
   !modified term of slab geometry
   dMz = - pos_ip0i(4)*pos_ip0i(3)/2.D0 - pos_ip0(4)*pos_ip0(3)/2.D0
-  DeltaE = DeltaE + 2*pi / (Lx*Ly*Lz*Z_empty) * lb/Beta * (2*Mz*dMz + dMz*dMz)
+  DeltaE = DeltaE + Mz_coef * (2*Mz*dMz + dMz*dMz)
   !
   !External field energy
-  DeltaE=DeltaE+EF * pos_ip0i(4)*pos_ip0i(3)/2.D0+EF*pos_ip0(4)*pos_ip0(3)/2.D0
+  DeltaE=DeltaE+EF*pos_ip0i(4)*pos_ip0i(3)/2.D0+EF*pos_ip0(4)*pos_ip0(3)/2.D0
 
-  DeltaE = DeltaE + sqrt(alpha2/pi)*(qq1**2+qq2**2)
+  DeltaE = DeltaE + sqrt(alpha2/pi)*(qq1*qq1+qq2*qq2)*lb/beta
 
 end subroutine Delta_real_Energy_delete
 
@@ -965,7 +962,7 @@ subroutine update_real_cell_list_Ewald
   icelz = int((pos_ip1(3)-1)/clz)+1
   call update_real_cell_list_add_Ewald(ip,icelx,icely,icelz)
 
-  Mz = Mz + dMz
+  call update_rhok
 
 end subroutine update_real_cell_list_Ewald
 
@@ -987,7 +984,7 @@ subroutine update_cell_list_pH_add_Ewald
   call update_real_cell_list_add_Ewald(ip1,icelx,icely,icelz)
   call update_charge_cell_list_add_Ewald(ip1)
 
-  Mz = Mz + dMz
+  call update_rhok
 
   Nq_net = Nq_net + 1
 
@@ -1011,7 +1008,7 @@ subroutine update_cell_list_pH_delete_Ewald
   call update_real_cell_list_delete_Ewald(ip1,icelx,icely,icelz)
   call update_charge_cell_list_delete_Ewald(ip1)
 
-  Mz = Mz + dMz
+  call update_rhok
 
   Nq_net = Nq_net - 1
 

@@ -293,15 +293,15 @@ call cpu_time(st)
     if ( mod(i,DeltaStep) == 0 .and. Nq/=0 ) then
       call choose_particle_pH
       if (pos(ip,4)==0) then
-!         call total_energy_ewald(EE1, real_time, fourier_time)
+        call total_energy_ewald(EE1, real_time, fourier_time)
         call add_particle(EE,DeltaE)
-!         call total_energy_ewald(EE2, real_time, fourier_time)
-!         write(*,*) 'add',EE2-EE1,DeltaE,EE2,EE,ip
+        call total_energy_ewald(EE2, real_time, fourier_time)
+        write(*,*) 'add',EE2-EE1,DeltaE,EE2,EE,ip
       else
-!         call total_energy_ewald(EE1, real_time, fourier_time)
+        call total_energy_ewald(EE1, real_time, fourier_time)
         call delete_particle(EE,DeltaE)
-!         call total_energy_ewald(EE2, real_time, fourier_time)
-!         write(*,*) 'delete',EE2-EE1,DeltaE,EE2,EE,ip
+        call total_energy_ewald(EE2, real_time, fourier_time)
+        write(*,*) 'delete',EE2-EE1,DeltaE,EE2,EE,ip
       end if
     else
       call choose_particle
