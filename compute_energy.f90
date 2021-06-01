@@ -153,6 +153,10 @@ subroutine write_energy_parameters
   write(*,*) 'clx           :', clx
   write(*,*) 'cly           :', cly
   write(*,*) 'clz           :', clz
+  write(*,*) 'alpha         :', alpha
+  write(*,*) 'Kmax1         :', Kmax1
+  write(*,*) 'Kmax2         :', Kmax2
+  write(*,*) 'Kmax3         :', Kmax3
   write(*,*) '****************************************************************'
   write(*,*)
   write(*,*)
@@ -319,15 +323,11 @@ subroutine energy_lookup_table(EE, rt, ft)
     end do
     EE = EE + EE1 * pos(m,4)
   end do
-  EE=EE
   call cpu_time(fn)
   rt = fn - st 
-!   EE1 = EE
-!   write(*,*) 'real energy', EE, rt
   !
   !fourier space
   call cpu_time(st)
-!   write(*,*) size(fourier_ij)
   q_total = 0
   do i = 1, Nq
     m = charge(i)
@@ -343,7 +343,7 @@ subroutine energy_lookup_table(EE, rt, ft)
       end if
     end do
     EE2= pos(m,4)*EE2
-    EE = EE + EE2 - EF*pos(m,4)*pos(m,3)/2.D0*2
+    EE = EE - EF*pos(m,4)*pos(m,3)/2.D0*2 + EE2 
     q_total = q_total + pos(m,4)**2
   end do
   call cpu_time(fn)
@@ -377,9 +377,9 @@ subroutine pre_calculate_fourier_space
 !   complex(kind=8) :: fij
 !   integer :: rr(3)
 
-  alpha = pi/2/tol
+  alpha = pi/8/tol
   alpha2 = alpha*alpha
-  rcc = 1.D0*floor(2*tol*tol/pi*2)       ! 2*2.5*2.5/pi*2=7.96, lattice unit
+  rcc = 1.D0*floor(24*tol*tol/pi)       ! 2*2.5*2.5/pi*2=7.96, lattice unit
   rcc2 = rcc*rcc                         ! rcc is dependent on tol only.
 
   Kmax1 = Lx2
@@ -390,21 +390,21 @@ subroutine pre_calculate_fourier_space
     exp_x = cmplx(-1,0)
   else
     K1_half = (Kmax1-1) / 2
-    exp_x = cmplx(cos(pi*(Kmax1-1)/Kmax1),sin(pi*(Kmax1-1)/Kmax1))
+    exp_x = cmplx(cos(pi*(Kmax1-1)/Kmax1),sin(pi*(Kmax1-1)/Kmax1),8)
   end if
   if ( mod(Kmax2,2) == 0 ) then
     K2_half = Kmax2 / 2
     exp_y = cmplx(-1,0)
   else
     K2_half = (Kmax2-1) / 2
-    exp_y = cmplx(cos(pi*(Kmax2-1)/Kmax2),sin(pi*(Kmax2-1)/Kmax2))
+    exp_y = cmplx(cos(pi*(Kmax2-1)/Kmax2),sin(pi*(Kmax2-1)/Kmax2),8)
   end if
   if ( mod(Kmax3,2) == 0 ) then
     K3_half = Kmax3 / 2
     exp_z = cmplx(-1,0)
   else
     K3_half = (Kmax3-1) / 2
-    exp_z = cmplx(cos(pi*(Kmax3-1)/Kmax3),sin(pi*(Kmax3-1)/Kmax3))
+    exp_z = cmplx(cos(pi*(Kmax3-1)/Kmax3),sin(pi*(Kmax3-1)/Kmax3),8)
   end if
 
   !
@@ -422,11 +422,14 @@ subroutine pre_calculate_fourier_space
         kx = 2*pi*(i-K1_half-1)/Kmax1
         ky = 2*pi*(j-K2_half-1)/Kmax2
         kz = 2*pi*(k-K3_half-1)/Kmax3
+!         kx = 2*pi*(i-K1_half-1)/Lx
+!         ky = 2*pi*(j-K2_half-1)/Ly
+!         kz = 2*pi*(k-K3_half-1)/Lz/Z_empty
         k2 = kx*kx + ky*ky + kz*kz
         if (k2 == 0) then
           exp_k2(i,j,k) = 0
         else
-          exp_k2(i,j,k) = cmplx(exp(-k2/4/alpha2)/k2,0)
+          exp_k2(i,j,k) = cmplx(exp(-k2/4/alpha2)/k2,0,8)
         end if
 !         krx = kx*rr(1)
 !         kry = ky*rr(2)
@@ -446,7 +449,7 @@ subroutine pre_calculate_fourier_space
   deallocate(exp_k2)
 
   if (allocated(fourier_ij1)) deallocate( fourier_ij1 )
-  allocate( fourier_ij1( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1),-K3_half:(Kmax3-K3_half-1) ) )
+  allocate( fourier_ij1( -K1_half:(Kmax1-K1_half-1), -K2_half:(Kmax2-K2_half-1), -K3_half:(Kmax3-K3_half-1) ) )
 
   do i = 1, Kmax1
     do j = 1, Kmax2 
